@@ -23,7 +23,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "gnss.h"
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -44,7 +45,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+GNSS_Handle_t hgnss;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -55,7 +56,18 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+int _write(int fd, char* ptr, int len) {
+  HAL_StatusTypeDef hstatus;
 
+  if (fd == 1 || fd == 2) {
+    hstatus = HAL_UART_Transmit(&DEBUG_UART, (uint8_t *) ptr, len, HAL_MAX_DELAY);
+    if (hstatus == HAL_OK)
+      return len;
+    else
+      return -1;
+  }
+  return -1;
+}
 /* USER CODE END 0 */
 
 /**
@@ -90,13 +102,34 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
+  GNSS_Init(&hgnss, &GNSS_UART);
+  printf("\nUART OK!\r\nGNSS OK!\r\n\r\n");
 
+  HAL_Delay(3000);
+  HAL_GPIO_WritePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin, GPIO_PIN_RESET);
+
+  uint32_t last_tx = 0, now = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	now = HAL_GetTick();
+	GNSS_Process(&hgnss);
+
+	if (now - last_tx >= 500) {
+		printf("=-=-=-=-=-=-=-=-=-=-=\r\n%s\r\n", hgnss.rx.line_buf);
+		int32_t lat = hgnss.data.lat_e7, lon = hgnss.data.lon_e7;
+		uint16_t alt = hgnss.data.alt_m;
+		uint8_t sats = hgnss.data.satellites, fix = hgnss.data.fix;
+
+		printf("=====================\r\nLat: %ld\r\nLon: %ld\r\nAlt: %u\r\n", lat, lon, alt);
+		printf("=-=-=-=-=-=-=-=-=-=-=\r\nSats: %u\r\nFix: %u\r\n", sats, fix);
+
+		last_tx = now;
+		HAL_GPIO_TogglePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin);
+	}
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -143,7 +176,9 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+	if(huart == &GNSS_UART) GNSS_RxCallback(&hgnss);
+}
 /* USER CODE END 4 */
 
 /**
