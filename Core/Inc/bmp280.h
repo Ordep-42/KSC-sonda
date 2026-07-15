@@ -48,5 +48,6 @@ HAL_StatusTypeDef BMP280_Init(BMP280_Handle_t *hbmp, I2C_HandleTypeDef *hi2c, ui
 HAL_StatusTypeDef BMP280_SetMode(BMP280_Handle_t *hbmp, uint8_t mode);
 HAL_StatusTypeDef BMP280_SetConfig(BMP280_Handle_t *hbmp, uint8_t config);
 HAL_StatusTypeDef BMP280_ReadData(BMP280_Handle_t *hbmp, BMP280_Data_t *data);
+HAL_StatusTypeDef BMP280_Reset(BMP280_Handle_t *hbmp);
 
 #endif /* INC_BMP280_H_ */

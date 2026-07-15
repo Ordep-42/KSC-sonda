@@ -39,7 +39,7 @@
 /* USER CODE BEGIN PD */
 #define BMP280_ADDRESS (0x76 << 1) // 0b1110110; Address[7-bit]Write/Read[1-bit]
 #define BMP280_CTRL ((3 << 5) | (1 << 2) | (3)) // osr_t = 4; osr_p = 1,; mode = 3;
-#define BMP280_CONFIG (1 << 5) // t_sb = 001; iir = 0; spi = 0;
+#define BMP280_CONFIG (1 << 5) | (3 << 2)// t_sb = 001; iir = 4; spi = 0;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
