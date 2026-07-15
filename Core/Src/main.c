@@ -25,7 +25,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include <stdlib.h>
+#include "bmp280.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -35,7 +37,9 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define BMP280_ADDRESS (0x76 << 1) // 0b1110110; Address[7-bit]Write/Read[1-bit]
+#define BMP280_CTRL ((3 << 5) | (1 << 2) | (3)) // osr_t = 4; osr_p = 1,; mode = 3;
+#define BMP280_CONFIG (1 << 5) // t_sb = 001; iir = 0; spi = 0;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -46,7 +50,10 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+BMP280_Handle_t hbmp;
+BMP280_Data_t data;
 
+uint8_t drdy = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -57,7 +64,28 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+// Send printf to uart1
+int _write(int fd, char* ptr, int len) {
+  HAL_StatusTypeDef hstatus;
 
+  if (fd == 1 || fd == 2) {
+    hstatus = HAL_UART_Transmit(&DEBUG_UART, (uint8_t *) ptr, len, HAL_MAX_DELAY);
+    if (hstatus == HAL_OK)
+      return len;
+    else
+      return -1;
+  }
+  return -1;
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+ if(htim == &htim4)
+ {
+	 drdy = 1;
+	 HAL_TIM_Base_Stop_IT(&htim4);
+ }
+}
 /* USER CODE END 0 */
 
 /**
@@ -95,12 +123,83 @@ int main(void)
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 
+  BMP280_Init(&hbmp, &hi2c1, BMP280_ADDRESS);
+    HAL_Delay(3);
+
+    printf("=============================\r\n"
+  		 "CHIP ID: %u\r\n",
+  		 hbmp.chip_id);
+    HAL_Delay(3);
+
+    printf("=============================\r\n"
+    		 "CAL dig T1: %u\r\n"
+  		 "CAL dig T2: %d\r\n"
+  		 "CAL dig T3: %d\r\n"
+  		 "CAL dig P1: %u\r\n"
+  		 "CAL dig P2: %d\r\n"
+  		 "CAL dig P3: %d\r\n"
+  		 "CAL dig P4: %d\r\n"
+  		 "CAL dig P5: %d\r\n"
+  		 "CAL dig P6: %d\r\n"
+  		 "CAL dig P7: %d\r\n"
+  		 "CAL dig P8: %d\r\n"
+  		 "CAL dig P9: %d\r\n",
+  		 hbmp.calib.dig_T1,
+  		 hbmp.calib.dig_T2,
+  		 hbmp.calib.dig_T3,
+  		 hbmp.calib.dig_P1,
+  		 hbmp.calib.dig_P2,
+  		 hbmp.calib.dig_P3,
+  		 hbmp.calib.dig_P4,
+  		 hbmp.calib.dig_P5,
+  		 hbmp.calib.dig_P6,
+  		 hbmp.calib.dig_P7,
+  		 hbmp.calib.dig_P8,
+  		 hbmp.calib.dig_P9
+  		 );
+
+    BMP280_SetMode(&hbmp, BMP280_CTRL);
+    BMP280_SetConfig(&hbmp, BMP280_CONFIG);
+
+    HAL_Delay(5);
+
+    BMP280_ReadData(&hbmp, &data);
+      printf("=============================\r\n"
+    		 "ADC T raw: %ld\r\n",
+    		 hbmp.adc_T_raw
+      		 );
+      printf("T = %ld.%02ld°C\r\n",
+             data.temp / 100,
+             labs(data.temp % 100));
+
+      printf("=============================\r\n"
+      		 "ADC P raw: %ld\r\n",
+      		 hbmp.adc_P_raw
+        		 );
+	printf("P = %lu.%02luhPa\r\n",
+		   data.pres / 100,
+		   labs(data.pres % 100));
+	HAL_TIM_Base_Start_IT(&htim4);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	if (drdy == 1) {
+		BMP280_ReadData(&hbmp, &data);
+	  printf("=============================\r\n");
+	  printf("T = %ld.%02ld°C\r\n",
+			 data.temp / 100,
+			 labs(data.temp % 100));
+		printf("P = %lu.%02luhPa\r\n",
+			   data.pres / 100,
+			   labs(data.pres % 100));
+		drdy = 0;
+		HAL_TIM_Base_Start_IT(&htim4);
+	}
+	HAL_Delay(100);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

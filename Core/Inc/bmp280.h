@@ -34,6 +34,7 @@ typedef struct {
 	uint8_t address;
 	uint8_t status;
 	uint8_t ctrl_mode;
+	uint8_t config;
 	int32_t adc_T_raw;
 	int32_t adc_P_raw;
 } BMP280_Handle_t;
@@ -45,6 +46,7 @@ typedef struct {
 
 HAL_StatusTypeDef BMP280_Init(BMP280_Handle_t *hbmp, I2C_HandleTypeDef *hi2c, uint8_t dev_address);
 HAL_StatusTypeDef BMP280_SetMode(BMP280_Handle_t *hbmp, uint8_t mode);
+HAL_StatusTypeDef BMP280_SetConfig(BMP280_Handle_t *hbmp, uint8_t config);
 HAL_StatusTypeDef BMP280_ReadData(BMP280_Handle_t *hbmp, BMP280_Data_t *data);
 
 #endif /* INC_BMP280_H_ */
