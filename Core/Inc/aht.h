@@ -33,12 +33,11 @@ typedef struct {
 	I2C_HandleTypeDef *hi2c;
 	AHT_State_t state;
 	volatile uint32_t events;
-	TIM_HandleTypeDef *htim;
 
 	uint8_t rx_buf[6];
 } AHT_Handle_t;
 
-void AHT_Init(AHT_Handle_t *haht, I2C_HandleTypeDef *hi2c, uint8_t dev_addr, TIM_HandleTypeDef *htim);
+void AHT_Init(AHT_Handle_t *haht, I2C_HandleTypeDef *hi2c, uint8_t dev_addr);
 HAL_StatusTypeDef AHT_ReadData(AHT_Handle_t *haht, AHT_Data_t *data);
 HAL_StatusTypeDef AHT_TriggerMeasurement(AHT_Handle_t *haht);
 

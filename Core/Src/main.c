@@ -79,17 +79,17 @@ int _write(int fd, char* ptr, int len) {
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
- if(htim == haht.htim)
+ if(htim == &htim4)
  {
 	 haht.events |= AHT_EVT_DAVAIL;
-	 HAL_TIM_Base_Stop_IT(haht.htim);
+	 HAL_TIM_Base_Stop_IT(&htim4);
  }
 }
 
 void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c) {
 	if (hi2c == haht.hi2c) {
 		haht.events |= AHT_EVT_TRIGGER;
-		HAL_TIM_Base_Start_IT(haht.htim);
+		HAL_TIM_Base_Start_IT(&htim4);
 	}
 }
 
@@ -134,12 +134,12 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
-  AHT_Init(&haht, &SENSOR_I2C, AHT10_ADDRESS, &AHT10_TIM);
+  AHT_Init(&haht, &SENSOR_I2C, AHT10_ADDRESS);
 	if (AHT_TriggerMeasurement(&haht) == HAL_OK) haht.state = AHT_BUSY;
-	/* USER CODE END 2 */
+  /* USER CODE END 2 */
 
-	/* Infinite loop */
-	/* USER CODE BEGIN WHILE */
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
 	while (1)
 	{
 	  if ((haht.events & AHT_EVT_DAVAIL) &&
@@ -173,11 +173,11 @@ int main(void)
 		  }
 
 		  HAL_Delay(1);
-	  /* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
-	  /* USER CODE BEGIN 3 */
+    /* USER CODE BEGIN 3 */
 	}
-	/* USER CODE END 3 */
+  /* USER CODE END 3 */
 }
 
 /**

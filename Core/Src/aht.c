@@ -23,12 +23,11 @@ static const uint8_t aht10_measure_cmd[3] = {
     AHT10_PARAM_NOP
 };
 
-void AHT_Init(AHT_Handle_t *haht, I2C_HandleTypeDef *hi2c, uint8_t dev_addr, TIM_HandleTypeDef *htim) {
+void AHT_Init(AHT_Handle_t *haht, I2C_HandleTypeDef *hi2c, uint8_t dev_addr) {
 	haht->hi2c = hi2c;
 	haht->addr = dev_addr;
 	haht->state = AHT_IDLE;
 	haht->events = 0;
-	haht->htim = htim;
 	memset(haht->rx_buf, 0, sizeof(haht->rx_buf));
 }
 
