@@ -12,8 +12,7 @@
 
 typedef enum {
 	AHT_IDLE = 0,
-	AHT_BUSY,
-	AHT_ERROR
+	AHT_BUSY
 } AHT_State_t;
 
 typedef enum {
@@ -32,7 +31,7 @@ typedef struct {
 	uint8_t addr;
 	I2C_HandleTypeDef *hi2c;
 	AHT_State_t state;
-	volatile uint32_t events;
+	volatile uint8_t events;
 
 	uint8_t rx_buf[6];
 } AHT_Handle_t;

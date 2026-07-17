@@ -27,7 +27,7 @@ void AHT_Init(AHT_Handle_t *haht, I2C_HandleTypeDef *hi2c, uint8_t dev_addr) {
 	haht->hi2c = hi2c;
 	haht->addr = dev_addr;
 	haht->state = AHT_IDLE;
-	haht->events = 0;
+	haht->events = AHT_EVT_NONE;
 	memset(haht->rx_buf, 0, sizeof(haht->rx_buf));
 }
 
@@ -38,9 +38,9 @@ HAL_StatusTypeDef AHT_ReadData(AHT_Handle_t *haht, AHT_Data_t *data) {
 
 	if (!(haht->events & AHT_EVT_DREADY)) return HAL_BUSY;
 
-	haht->events &= ~AHT_EVT_DREADY; // Limpa os eventos
+	haht->events &= ~AHT_EVT_DREADY;
 
-	if (haht->rx_buf[0] & AHT10_BUSY_BIT) return HAL_BUSY; // Verifica o bit busy do sensor
+	if (haht->rx_buf[0] & AHT10_BUSY_BIT) return HAL_BUSY;
 
 	// Temperatura
 	raw =
@@ -65,6 +65,7 @@ HAL_StatusTypeDef AHT_ReadData(AHT_Handle_t *haht, AHT_Data_t *data) {
 
 HAL_StatusTypeDef AHT_TriggerMeasurement(AHT_Handle_t *haht)
 {
+	if (haht == NULL) return HAL_ERROR;
     return HAL_I2C_Master_Transmit_IT(
         haht->hi2c,
         haht->addr,
