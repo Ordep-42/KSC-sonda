@@ -23,30 +23,34 @@ static const uint8_t aht10_measure_cmd[3] = {
     AHT10_PARAM_NOP
 };
 
-void AHT_Init(AHT_Handle_t *haht, I2C_HandleTypeDef *hi2c, uint8_t dev_addr) {
+HAL_StatusTypeDef AHT_Init(AHT_Handle_t *haht, I2C_HandleTypeDef *hi2c, const uint8_t dev_addr) {
+	if (haht == NULL || hi2c == NULL) return HAL_ERROR;
 	haht->hi2c = hi2c;
 	haht->addr = dev_addr;
-	haht->state = AHT_IDLE;
-	haht->events = AHT_EVT_NONE;
-	memset(haht->rx_buf, 0, sizeof(haht->rx_buf));
+	return HAL_OK;
 }
 
 HAL_StatusTypeDef AHT_ReadData(AHT_Handle_t *haht, AHT_Data_t *data) {
-	uint32_t raw;
-
 	if (haht == NULL || data == NULL) return HAL_ERROR;
 
-	if (!(haht->events & AHT_EVT_DREADY)) return HAL_BUSY;
+	uint8_t rx_buf[6];
+	HAL_StatusTypeDef status = HAL_I2C_Master_Receive(
+			  haht->hi2c,
+			  haht->addr,
+			  rx_buf,
+			  6,
+			  HAL_MAX_DELAY);
 
-	haht->events &= ~AHT_EVT_DREADY;
+	if (status != HAL_OK) return status;
 
-	if (haht->rx_buf[0] & AHT10_BUSY_BIT) return HAL_BUSY;
+	uint32_t raw;
+	if (rx_buf[0] & AHT10_BUSY_BIT) return HAL_BUSY;
 
 	// Temperatura
 	raw =
-		(((uint32_t)haht->rx_buf[3] & 0x0F) << 16) |
-		((uint32_t) haht->rx_buf[4] << 8) |
-		haht->rx_buf[5];
+		(((uint32_t)rx_buf[3] & 0x0F) << 16) |
+		((uint32_t)rx_buf[4] << 8) |
+		rx_buf[5];
 
 	float raw_temp = (((float)raw * 200 / AHT10_SCALE) - 50.0f);
 	data->temp = (int16_t)(raw_temp * 100 +
@@ -54,9 +58,9 @@ HAL_StatusTypeDef AHT_ReadData(AHT_Handle_t *haht, AHT_Data_t *data) {
 
 	// Umidade
 	raw =
-		((uint32_t)haht->rx_buf[1] << 12) |
-		((uint32_t) haht->rx_buf[2] << 4) |
-		(haht->rx_buf[3] >> 4);
+		((uint32_t)rx_buf[1] << 12) |
+		((uint32_t)rx_buf[2] << 4) |
+		(rx_buf[3] >> 4);
 
 	data->humi = (int16_t)(((float)raw * 100 / AHT10_SCALE) * 100.0f + 0.5f);
 
@@ -66,10 +70,14 @@ HAL_StatusTypeDef AHT_ReadData(AHT_Handle_t *haht, AHT_Data_t *data) {
 HAL_StatusTypeDef AHT_TriggerMeasurement(AHT_Handle_t *haht)
 {
 	if (haht == NULL) return HAL_ERROR;
-    return HAL_I2C_Master_Transmit_IT(
+    HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(
         haht->hi2c,
         haht->addr,
         (uint8_t*)aht10_measure_cmd,
-        sizeof(aht10_measure_cmd)
+        sizeof(aht10_measure_cmd),
+		HAL_MAX_DELAY
     );
+
+   if (status != HAL_OK) return status;
+   return HAL_OK;
 }

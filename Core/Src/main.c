@@ -39,7 +39,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define AHT10_ADDRESS (0x38 << 1) // 0b1110000; Address[7-bit]Write/Read[1-bit]
-
+#define AHT10_DRDY 1
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -53,6 +53,7 @@
 AHT_Handle_t haht;
 AHT_Data_t data;
 
+uint8_t drdy = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -81,22 +82,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
  if(htim == &htim4)
  {
-	 haht.events |= AHT_EVT_DAVAIL;
+	 drdy |= AHT10_DRDY;
 	 HAL_TIM_Base_Stop_IT(&htim4);
  }
-}
-
-void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c) {
-	if (hi2c == haht.hi2c) {
-		haht.events |= AHT_EVT_TRIGGER;
-		HAL_TIM_Base_Start_IT(&htim4);
-	}
-}
-
-void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c) {
-	if (hi2c == haht.hi2c) {
-		haht.events |= AHT_EVT_DREADY;
-	}
 }
 /* USER CODE END 0 */
 
@@ -135,36 +123,23 @@ int main(void)
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
   AHT_Init(&haht, &SENSOR_I2C, AHT10_ADDRESS);
-	if (AHT_TriggerMeasurement(&haht) == HAL_OK) haht.state = AHT_BUSY;
+  AHT_TriggerMeasurement(&haht);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1)
 	{
-	  if ((haht.events & AHT_EVT_DAVAIL) &&
-			  (haht.state == AHT_BUSY))
-		  {
-			  haht.events &= ~AHT_EVT_DAVAIL;
-
-			  HAL_I2C_Master_Receive_IT(
-				  haht.hi2c,
-				  haht.addr,
-				  haht.rx_buf,
-				  6
-			  );
-		  }
-
+	  if (drdy & AHT10_DRDY) {
 		  if (AHT_ReadData(&haht, &data) == HAL_OK) {
 
+			  drdy &= ~AHT10_DRDY;
 			  printf("=============================\r\n"
 					 "TEMP: %d.%02d°C\tHUMI: %u.%02u%%\r\n",
 					 data.temp / 100, abs(data.temp % 100),
 					 data.humi / 100, data.humi % 100);
 
-			  haht.state = AHT_IDLE;
-
-			  if (AHT_TriggerMeasurement(&haht) == HAL_OK) haht.state = AHT_BUSY;
+			  if (AHT_TriggerMeasurement(&haht) == HAL_OK) HAL_TIM_Base_Start_IT(&htim4);;
 
 			  HAL_GPIO_TogglePin(
 				  STATUS_LED_GPIO_Port,
@@ -176,6 +151,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  }
 	}
   /* USER CODE END 3 */
 }
