@@ -133,11 +133,12 @@ HAL_StatusTypeDef BMP280_Init(BMP280_Handle_t *hbmp, I2C_HandleTypeDef *hi2c, ui
 	}
 	hbmp->hi2c = hi2c;
 	hbmp->address = dev_address;
+	uint8_t chipid;
 	HAL_StatusTypeDef status;
-	status = bmp_read_reg(hbmp, BMP280_REG_CHIPID, &hbmp->chip_id, 1);
+	status = bmp_read_reg(hbmp, BMP280_REG_CHIPID, &chipid, 1);
 
 	if (status != HAL_OK) return status;
-	if (hbmp->chip_id != BMP280_CHIPID) return HAL_ERROR;
+	if (chipid != BMP280_CHIPID) return HAL_ERROR;
 
 	return bmp_read_calibration(hbmp);
 }

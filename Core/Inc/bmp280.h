@@ -29,14 +29,14 @@ typedef struct {
 typedef struct {
 	BMP280_CalParams_t calib;
 
-	I2C_HandleTypeDef *hi2c;
-	uint8_t chip_id;
 	uint8_t address;
 	uint8_t status;
 	uint8_t ctrl_mode;
 	uint8_t config;
 	int32_t adc_T_raw;
 	int32_t adc_P_raw;
+
+	I2C_HandleTypeDef *hi2c;
 } BMP280_Handle_t;
 
 typedef struct {
