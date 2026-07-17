@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "bmp280.h"
 #include "aht.h"
 /* USER CODE END Includes */
 
@@ -38,8 +39,16 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+// AHT10
 #define AHT10_ADDRESS (0x38 << 1) // 0b1110000; Address[7-bit]Write/Read[1-bit]
 #define AHT10_DRDY 1
+
+// BMP280
+#define BMP280_ADDRESS (0x76 << 1) // 0b1110110; Address[7-bit]Write/Read[1-bit]
+#define BMP280_CTRL ((3 << 5) | (1 << 2) | (3)) // osr_t = 4; osr_p = 1,; mode = 3;
+#define BMP280_CONFIG (1 << 5) | (3 << 2)// t_sb = 001; iir = 4; spi = 0;
+#define BMP280_DRDY (1<<1)
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -51,9 +60,12 @@
 
 /* USER CODE BEGIN PV */
 AHT_Handle_t haht;
-AHT_Data_t data;
+AHT_Data_t aht_data;
 
-uint8_t drdy = 0;
+BMP280_Handle_t hbmp;
+BMP280_Data_t bmp_data;
+
+uint8_t sensors_drdy = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -82,7 +94,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
  if(htim == &htim4)
  {
-	 drdy |= AHT10_DRDY;
+	 sensors_drdy |= AHT10_DRDY;
+   sensors_drdy |= BMP280_DRDY;
 	 HAL_TIM_Base_Stop_IT(&htim4);
  }
 }
@@ -122,36 +135,50 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
+
   AHT_Init(&haht, &SENSOR_I2C, AHT10_ADDRESS);
   AHT_TriggerMeasurement(&haht);
+  
+  BMP280_Init(&hbmp, &hi2c1, BMP280_ADDRESS);
+  BMP280_SetMode(&hbmp, BMP280_CTRL);
+  BMP280_SetConfig(&hbmp, BMP280_CONFIG);
+  
+	HAL_TIM_Base_Start_IT(&htim4);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1)
 	{
-	  if (drdy & AHT10_DRDY) {
-		  if (AHT_ReadData(&haht, &data) == HAL_OK) {
+	  if (sensors_drdy & AHT10_DRDY) {
+		  if (AHT_ReadData(&haht, &aht_data) == HAL_OK) {
 
-			  drdy &= ~AHT10_DRDY;
+			  sensors_drdy &= ~AHT10_DRDY;
 			  printf("=============================\r\n"
-					 "TEMP: %d.%02d°C\tHUMI: %u.%02u%%\r\n",
-					 data.temp / 100, abs(data.temp % 100),
-					 data.humi / 100, data.humi % 100);
+					     "TEMP: %d.%02d°C\tHUMI: %u.%02u%%\r\n",
+					     aht_data.temp / 100, abs(aht_data.temp % 100),
+					     aht_data.humi / 100, aht_data.humi % 100);
 
-			  if (AHT_TriggerMeasurement(&haht) == HAL_OK) HAL_TIM_Base_Start_IT(&htim4);;
+			  AHT_TriggerMeasurement(&haht);
+        HAL_TIM_Base_Start_IT(&htim4);
+		  } 
+    } if (sensors_drdy & BMP280_DRDY) {
+      if (BMP280_ReadData(&hbmp, &bmp_data) == HAL_OK) {
+        
+        sensors_drdy &= ~BMP280_DRDY;
+        printf("=============================\r\n"
+               "TEMP = %ld.%02ld°C\tPRES: %lu.%02luhPa\r\n",
+           bmp_data.temp / 100, labs(bmp_data.temp % 100),
+           bmp_data.pres / 100, labs(bmp_data.pres % 100));
+        
+        HAL_TIM_Base_Start_IT(&htim4);
+      }
+    }
 
-			  HAL_GPIO_TogglePin(
-				  STATUS_LED_GPIO_Port,
-				  STATUS_LED_Pin
-			  );
-		  }
-
-		  HAL_Delay(1);
+		HAL_Delay(20); 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  }
 	}
   /* USER CODE END 3 */
 }
