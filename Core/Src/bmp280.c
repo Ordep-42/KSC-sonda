@@ -21,6 +21,7 @@
 #define BMP280_MEASURING 0x08
 #define BMP280_CHIPID 0x58
 #define BMP280_RESET 0xB6
+#define BMP280_RAW_DATA_LEN 6
 
 static uint16_t bmp_u16_le(const uint8_t *buf) {
 	return (uint16_t)buf[0] |
@@ -37,7 +38,7 @@ static int32_t bmp_build_adc20(const uint8_t data[3]) {
 		   ((int32_t)data[2] >> 4 );
 }
 
-static int32_t compensate_temp(BMP280_CalParams_t *calib, int32_t adc_T_raw) {
+static int32_t compensate_temp(BMP280_CalParams_t *calib, const int32_t adc_T_raw) {
 	int32_t var1, var2, temp;
 
 	var1 = ((((adc_T_raw >> 3) - ((int32_t)calib->dig_T1<<1))) * ((int32_t)calib->dig_T2)) >> 11;
@@ -49,7 +50,7 @@ static int32_t compensate_temp(BMP280_CalParams_t *calib, int32_t adc_T_raw) {
 	return temp;
 }
 
-static uint32_t compensate_pres(BMP280_CalParams_t *calib, int32_t adc_P_raw) {
+static uint32_t compensate_pres(BMP280_CalParams_t *calib, const int32_t adc_P_raw) {
 	int32_t var1, var2;
 	uint32_t pres;
 	var1 = (((int32_t)calib->t_fine)>>1) - (int32_t)64000;
@@ -74,7 +75,7 @@ static uint32_t compensate_pres(BMP280_CalParams_t *calib, int32_t adc_P_raw) {
 	return pres;
 }
 
-HAL_StatusTypeDef bmp_read_reg(BMP280_Handle_t *hbmp, uint8_t reg, uint8_t *data, uint16_t len) {
+static HAL_StatusTypeDef bmp_read_reg(BMP280_Handle_t *hbmp, const uint8_t reg, uint8_t *data, const uint16_t len) {
 	HAL_StatusTypeDef status;
 	status = HAL_I2C_Master_Transmit(hbmp->hi2c, hbmp->address, &reg, 1, HAL_MAX_DELAY);
 
@@ -83,7 +84,7 @@ HAL_StatusTypeDef bmp_read_reg(BMP280_Handle_t *hbmp, uint8_t reg, uint8_t *data
 	return HAL_I2C_Master_Receive(hbmp->hi2c, hbmp->address, data, len, HAL_MAX_DELAY);
 }
 
-HAL_StatusTypeDef bmp_write_reg(BMP280_Handle_t *hbmp, uint8_t reg, uint8_t *data, uint16_t len) {
+static HAL_StatusTypeDef bmp_write_reg(BMP280_Handle_t *hbmp, const uint8_t reg, uint8_t *data, const uint16_t len) {
 	uint8_t tx[len + 1];
 	tx[0] = reg;
 	memcpy(&tx[1], data, len);
@@ -91,9 +92,9 @@ HAL_StatusTypeDef bmp_write_reg(BMP280_Handle_t *hbmp, uint8_t reg, uint8_t *dat
 	return HAL_I2C_Master_Transmit(hbmp->hi2c, hbmp->address, tx, len+1, HAL_MAX_DELAY);
 }
 
-HAL_StatusTypeDef bmp_read_raw_data(BMP280_Handle_t *hbmp) {
+static HAL_StatusTypeDef bmp_read_raw_data(BMP280_Handle_t *hbmp) {
 	HAL_StatusTypeDef status;
-	uint8_t adc_raw[6];
+	uint8_t adc_raw[BMP280_RAW_DATA_LEN];
 	status = bmp_read_reg(hbmp, BMP280_REG_DATA, adc_raw, 6);
 	if (status != HAL_OK) return status;
 
@@ -103,7 +104,7 @@ HAL_StatusTypeDef bmp_read_raw_data(BMP280_Handle_t *hbmp) {
 	return HAL_OK;
 }
 
-HAL_StatusTypeDef bmp_read_calibration(BMP280_Handle_t *hbmp) {
+static HAL_StatusTypeDef bmp_read_calibration(BMP280_Handle_t *hbmp) {
 	if (hbmp == NULL) return HAL_ERROR;
 
 	HAL_StatusTypeDef status;
