@@ -25,7 +25,10 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
+#include <stdlib.h>
 
+#include "aht.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -35,7 +38,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define AHT10_ADDRESS (0x38 << 1) // 0b1110000; Address[7-bit]Write/Read[1-bit]
+#define AHT10_DRDY 1
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -46,7 +50,10 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+AHT_Handle_t haht;
+AHT_Data_t data;
 
+uint8_t drdy = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -57,7 +64,28 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+// Send printf to uart1
+int _write(int fd, char* ptr, int len) {
+  HAL_StatusTypeDef hstatus;
 
+  if (fd == 1 || fd == 2) {
+    hstatus = HAL_UART_Transmit(&DEBUG_UART, (uint8_t *) ptr, len, HAL_MAX_DELAY);
+    if (hstatus == HAL_OK)
+      return len;
+    else
+      return -1;
+  }
+  return -1;
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+ if(htim == &htim4)
+ {
+	 drdy |= AHT10_DRDY;
+	 HAL_TIM_Base_Stop_IT(&htim4);
+ }
+}
 /* USER CODE END 0 */
 
 /**
@@ -94,17 +122,37 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
-
+  AHT_Init(&haht, &SENSOR_I2C, AHT10_ADDRESS);
+  AHT_TriggerMeasurement(&haht);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
+	while (1)
+	{
+	  if (drdy & AHT10_DRDY) {
+		  if (AHT_ReadData(&haht, &data) == HAL_OK) {
+
+			  drdy &= ~AHT10_DRDY;
+			  printf("=============================\r\n"
+					 "TEMP: %d.%02d°C\tHUMI: %u.%02u%%\r\n",
+					 data.temp / 100, abs(data.temp % 100),
+					 data.humi / 100, data.humi % 100);
+
+			  if (AHT_TriggerMeasurement(&haht) == HAL_OK) HAL_TIM_Base_Start_IT(&htim4);;
+
+			  HAL_GPIO_TogglePin(
+				  STATUS_LED_GPIO_Port,
+				  STATUS_LED_Pin
+			  );
+		  }
+
+		  HAL_Delay(1);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
+	  }
+	}
   /* USER CODE END 3 */
 }
 
