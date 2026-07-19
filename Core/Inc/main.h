@@ -63,6 +63,9 @@ void Error_Handler(void);
 #define I2C_SENSOR_TIMER htim4
 #define STATUS_LED_Pin GPIO_PIN_13
 #define STATUS_LED_GPIO_Port GPIOC
+#define QMC_DRDY_Pin GPIO_PIN_5
+#define QMC_DRDY_GPIO_Port GPIOB
+#define QMC_DRDY_EXTI_IRQn EXTI9_5_IRQn
 
 /* USER CODE BEGIN Private defines */
 
