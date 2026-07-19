@@ -189,6 +189,18 @@ HAL_StatusTypeDef QMC5883L_ReadData(QMC5883L_Handle_t *hqmc, QMC5883L_Data_t *da
 	return HAL_OK;
 }
 
+HAL_StatusTypeDef QMC5883L_ReadTemp(QMC5883L_Handle_t *hqmc, int16_t *temp) {
+	if (hqmc == NULL || temp == NULL) {
+		return HAL_ERROR;
+	}
+	HAL_StatusTypeDef status;
+	uint8_t raw_temp[2];
+	status = qmc_read_reg(hqmc, QMC5883L_REG_TEMP_DATA, raw_temp, 2);
+	if (status != HAL_OK) return status;
+
+	*temp = qmc_s16_le(raw_temp) / 100;
+}
+
 void QMC5883L_OnDataReadyIRQ(QMC5883L_Handle_t *hqmc)
 {
     if (hqmc == NULL)
