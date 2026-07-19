@@ -212,11 +212,17 @@ int main(void)
 		  HAL_StatusTypeDef status = QMC5883L_ReadData(&hqmc, &mag_data);
 
 		  if (status == HAL_OK) {
+			  int16_t temp;
+			  (void)QMC5883L_ReadTemp(&hqmc, &temp);
 			  printf("=============================\r\n"
-					 "X:%d uT  Y:%d uT  Z:%d uT\r\n",
+					 "X:%d uT  Y:%d uT  Z:%d uT\r\n"
+					 "TEMP: %d.%dºC\r\n",
 					 mag_data.x_axis,
 					 mag_data.y_axis,
-					 mag_data.z_axis);
+					 mag_data.z_axis,
+					 temp/10,
+					 abs(temp % 10));
+
 
 			  if (hqmc.events & QMC_EVT_OVERFLOW) {
 				  printf("OVERFLOW!\r\n");

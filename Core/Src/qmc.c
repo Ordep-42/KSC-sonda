@@ -198,7 +198,7 @@ HAL_StatusTypeDef QMC5883L_ReadTemp(QMC5883L_Handle_t *hqmc, int16_t *temp) {
 	status = qmc_read_reg(hqmc, QMC5883L_REG_TEMP_DATA, raw_temp, 2);
 	if (status != HAL_OK) return status;
 
-	*temp = qmc_s16_le(raw_temp) / 100;
+	*temp = qmc_s16_le(raw_temp);
 	return HAL_OK;
 }
 
