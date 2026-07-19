@@ -63,23 +63,6 @@ static HAL_StatusTypeDef qmc_write_reg(QMC5883L_Handle_t *hqmc, const uint8_t re
 	return HAL_I2C_Master_Transmit(hqmc->hi2c, hqmc->address, tx, len+1, HAL_MAX_DELAY);
 }
 
-static HAL_StatusTypeDef qmc_read_raw_data(QMC5883L_Handle_t *hqmc, QMC5883L_Data_t *raw_data) {
-	if (hqmc == NULL) {
-		return HAL_ERROR;
-	}
-	HAL_StatusTypeDef status;
-
-	uint8_t adc_raw[QMC5883L_RAW_DATA_LEN];
-	status = qmc_read_reg(hqmc, QMC5883L_REG_DATA, adc_raw, QMC5883L_RAW_DATA_LEN);
-	if (status != HAL_OK) return status;
-
-	raw_data->x_axis = qmc_s16_le(&adc_raw[0]);
-	raw_data->y_axis = qmc_s16_le(&adc_raw[2]);
-	raw_data->z_axis = qmc_s16_le(&adc_raw[4]);
-
-	return HAL_OK;
-}
-
 HAL_StatusTypeDef QMC5883L_Init(QMC5883L_Handle_t *hqmc, I2C_HandleTypeDef *hi2c, uint8_t dev_address) {
 	if (hqmc == NULL || hi2c == NULL) {
 		return HAL_ERROR;
@@ -140,6 +123,47 @@ HAL_StatusTypeDef QMC5883L_SetCtrl2(QMC5883L_Handle_t *hqmc, uint8_t ctrl2) {
 	return HAL_OK;
 }
 
+uint8_t QMC5883L_Ctrl1Encode(const QMC5883L_Ctrl1_t *cfg) {
+	if (cfg == NULL) return 0;
+
+	return ((uint8_t)cfg->osr   << 6) |
+		   ((uint8_t)cfg->range << 4) |
+		   ((uint8_t)cfg->odr   << 2) |
+		   ((uint8_t)cfg->mode);
+}
+
+uint8_t QMC5883L_Ctrl2Encode(const QMC5883L_Ctrl2_t *cfg) {
+    if (cfg == NULL) return 0;
+
+    return ((uint8_t)cfg->roll_pointer << 6) |
+           ((uint8_t)cfg->interrupt);
+}
+
+HAL_StatusTypeDef QMC5883L_ReadRaw(QMC5883L_Handle_t *hqmc, QMC5883L_Data_t *data) {
+	if (hqmc == NULL || data == NULL) {
+		return HAL_ERROR;
+	}
+	HAL_StatusTypeDef status;
+
+	uint8_t status_reg;
+	status = qmc_read_reg(hqmc, QMC5883L_REG_STATUS, &status_reg, 1);
+	if (status != HAL_OK) return status;
+
+	hqmc->status = status_reg;
+	if (!(status_reg & QMC5883L_STATUS_DRDY)) return HAL_BUSY;
+	if (status_reg & QMC5883L_STATUS_OVL) hqmc->events |= QMC_EVT_OVERFLOW;
+
+	uint8_t adc_raw[QMC5883L_RAW_DATA_LEN];
+	status = qmc_read_reg(hqmc, QMC5883L_REG_DATA, adc_raw, QMC5883L_RAW_DATA_LEN);
+	if (status != HAL_OK) return status;
+
+	data->x_axis = qmc_s16_le(&adc_raw[0]);
+	data->y_axis = qmc_s16_le(&adc_raw[2]);
+	data->z_axis = qmc_s16_le(&adc_raw[4]);
+
+	return HAL_OK;
+}
+
 HAL_StatusTypeDef QMC5883L_ReadData(QMC5883L_Handle_t *hqmc, QMC5883L_Data_t *data) {
 	if (hqmc == NULL || data == NULL) {
 		return HAL_ERROR;
@@ -155,7 +179,7 @@ HAL_StatusTypeDef QMC5883L_ReadData(QMC5883L_Handle_t *hqmc, QMC5883L_Data_t *da
 
 	QMC5883L_Data_t raw_data;
 
-	status = qmc_read_raw_data(hqmc, &raw_data);
+	status = QMC5883L_ReadRaw(hqmc, &raw_data);
 	if (status != HAL_OK) return status;
 
 	data->x_axis = qmc_to_uT(raw_data.x_axis, hqmc->scale);
@@ -178,4 +202,15 @@ HAL_StatusTypeDef QMC5883L_Reset(QMC5883L_Handle_t *hqmc) {
 
 	uint8_t cmd = QMC5883L_SOFT_RST;
 	return qmc_write_reg(hqmc, QMC5883L_REG_CTRL2, &cmd, 1);
+}
+
+HAL_StatusTypeDef QMC5883L_DeInit(QMC5883L_Handle_t *hqmc) {
+    if (hqmc == NULL)
+        return HAL_ERROR;
+
+    (void)QMC5883L_Reset(hqmc);
+
+    memset(hqmc, 0, sizeof(*hqmc));
+
+    return HAL_OK;
 }

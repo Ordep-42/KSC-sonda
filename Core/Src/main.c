@@ -52,8 +52,6 @@
 
 // QMC5883L
 #define QMC5883L_ADDRESS (0x0D << 1) // 0b0001101; Address[7-bit]Write/Read[1-bit]
-#define QMC5883L_CTRL1 (2<<6) | (0<<4) | (0<<2) | (1<<0) // osr = 128; rng = 2G; odr = 10Hz; mode = cont
-#define QMC5883L_CTRL2 (0<<7) | (1<<6) | (0<<0) // soft_rst = 0; rol_pnt = 1; int = 0 (on)
 
 /* USER CODE END PD */
 
@@ -73,6 +71,7 @@ BMP280_Data_t bmp_data;
 
 QMC5883L_Handle_t hqmc;
 QMC5883L_Data_t mag_data;
+
 
 uint8_t sensors_drdy = 0;
 /* USER CODE END PV */
@@ -163,8 +162,20 @@ int main(void)
 	HAL_TIM_Base_Start_IT(&htim4);
 
 	QMC5883L_Init(&hqmc, &hi2c1, QMC5883L_ADDRESS);
-	QMC5883L_SetCtrl1(&hqmc, QMC5883L_CTRL1);
-	QMC5883L_SetCtrl2(&hqmc, QMC5883L_CTRL2);
+
+	QMC5883L_Ctrl1_t ctrl1_cfg = {
+	    .osr = QMC5883L_OSR_128,
+	    .range = QMC5883L_RANGE_2G,
+	    .odr = QMC5883L_ODR_10HZ,
+	    .mode = QMC5883L_CONTINUOUS
+	};
+	QMC5883L_SetCtrl1(&hqmc, QMC5883L_Ctrl1Encode(&ctrl1_cfg));
+
+	QMC5883L_Ctrl2_t ctrl2_cfg = {
+		.interrupt = QMC5883L_INT_ENABLE,
+		.roll_pointer = QMC5883L_ROL_ENABLE
+	};
+	QMC5883L_SetCtrl2(&hqmc, QMC5883L_Ctrl2Encode(&ctrl2_cfg));
 	hqmc.events |= QMC_EVT_DATA_READY;
   /* USER CODE END 2 */
 
