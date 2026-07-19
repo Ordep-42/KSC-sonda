@@ -199,6 +199,7 @@ HAL_StatusTypeDef QMC5883L_ReadTemp(QMC5883L_Handle_t *hqmc, int16_t *temp) {
 	if (status != HAL_OK) return status;
 
 	*temp = qmc_s16_le(raw_temp) / 100;
+	return HAL_OK;
 }
 
 void QMC5883L_OnDataReadyIRQ(QMC5883L_Handle_t *hqmc)
