@@ -28,8 +28,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "bmp280.h"
 #include "aht.h"
+#include "bmp280.h"
+#include "qmc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,9 +46,14 @@
 
 // BMP280
 #define BMP280_ADDRESS (0x76 << 1) // 0b1110110; Address[7-bit]Write/Read[1-bit]
-#define BMP280_CTRL ((3 << 5) | (1 << 2) | (3)) // osr_t = 4; osr_p = 1,; mode = 3;
+#define BMP280_CTRL ((3 << 5) | (1 << 2) | (3)) // osr_t = 4; osr_p = 1,; mode = normal;
 #define BMP280_CONFIG (1 << 5) | (3 << 2)// t_sb = 001; iir = 4; spi = 0;
 #define BMP280_DRDY (1<<1)
+
+// QMC5883L
+#define QMC5883L_ADDRESS (0x0D << 1) // 0b0001101; Address[7-bit]Write/Read[1-bit]
+#define QMC5883L_CTRL1 (2<<6) | (0<<4) | (0<<2) | (1<<0) // osr = 128; rng = 2G; odr = 10Hz; mode = cont
+#define QMC5883L_CTRL2 (0<<7) | (1<<6) | (0<<0) // soft_rst = 0; rol_pnt = 1; int = 0 (on)
 
 /* USER CODE END PD */
 
@@ -64,6 +70,9 @@ AHT_Data_t aht_data;
 
 BMP280_Handle_t hbmp;
 BMP280_Data_t bmp_data;
+
+QMC5883L_Handle_t hqmc;
+QMC5883L_Data_t mag_data;
 
 uint8_t sensors_drdy = 0;
 /* USER CODE END PV */
@@ -95,9 +104,17 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
  if(htim == &htim4)
  {
 	 sensors_drdy |= AHT10_DRDY;
-   sensors_drdy |= BMP280_DRDY;
+	 sensors_drdy |= BMP280_DRDY;
 	 HAL_TIM_Base_Stop_IT(&htim4);
  }
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if (GPIO_Pin == QMC_DRDY_Pin)
+    {
+        QMC5883L_OnDataReadyIRQ(&hqmc);
+    }
 }
 /* USER CODE END 0 */
 
@@ -144,6 +161,11 @@ int main(void)
   BMP280_SetConfig(&hbmp, BMP280_CONFIG);
   
 	HAL_TIM_Base_Start_IT(&htim4);
+
+	QMC5883L_Init(&hqmc, &hi2c1, QMC5883L_ADDRESS);
+	QMC5883L_SetCtrl1(&hqmc, QMC5883L_CTRL1);
+	QMC5883L_SetCtrl2(&hqmc, QMC5883L_CTRL2);
+	hqmc.events |= QMC_EVT_DATA_READY;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -155,27 +177,46 @@ int main(void)
 
 			  sensors_drdy &= ~AHT10_DRDY;
 			  printf("=============================\r\n"
-					     "TEMP: %d.%02d°C\tHUMI: %u.%02u%%\r\n",
-					     aht_data.temp / 100, abs(aht_data.temp % 100),
-					     aht_data.humi / 100, aht_data.humi % 100);
+					 "TEMP: %d.%02d°C\tHUMI: %u.%02u%%\r\n",
+					 aht_data.temp / 100, abs(aht_data.temp % 100),
+					 aht_data.humi / 100, aht_data.humi % 100);
 
 			  AHT_TriggerMeasurement(&haht);
         HAL_TIM_Base_Start_IT(&htim4);
 		  } 
-    } if (sensors_drdy & BMP280_DRDY) {
-      if (BMP280_ReadData(&hbmp, &bmp_data) == HAL_OK) {
-        
-        sensors_drdy &= ~BMP280_DRDY;
-        printf("=============================\r\n"
-               "TEMP = %ld.%02ld°C\tPRES: %lu.%02luhPa\r\n",
-           bmp_data.temp / 100, labs(bmp_data.temp % 100),
-           bmp_data.pres / 100, labs(bmp_data.pres % 100));
-        
-        HAL_TIM_Base_Start_IT(&htim4);
-      }
-    }
+	  } if (sensors_drdy & BMP280_DRDY) {
+		  if (BMP280_ReadData(&hbmp, &bmp_data) == HAL_OK) {
 
-		HAL_Delay(20); 
+			sensors_drdy &= ~BMP280_DRDY;
+			printf("=============================\r\n"
+				   "TEMP: %ld.%02ld°C\tPRES: %lu.%02luhPa\r\n",
+				   bmp_data.temp / 100, labs(bmp_data.temp % 100),
+				   bmp_data.pres / 100, labs(bmp_data.pres % 100));
+		  }
+	  }
+
+	  if (hqmc.events & QMC_EVT_DATA_READY){
+		  hqmc.events &= ~QMC_EVT_DATA_READY;
+
+		  HAL_StatusTypeDef status = QMC5883L_ReadData(&hqmc, &mag_data);
+
+		  if (status == HAL_OK) {
+			  printf("=============================\r\n"
+					 "X:%d uT  Y:%d uT  Z:%d uT\r\n",
+					 mag_data.x_axis,
+					 mag_data.y_axis,
+					 mag_data.z_axis);
+
+			  if (hqmc.events & QMC_EVT_OVERFLOW) {
+				  printf("OVERFLOW!\r\n");
+				  hqmc.events &= ~QMC_EVT_OVERFLOW;
+			  }
+		  }
+		  else if(status == HAL_BUSY) printf("DRDY not ready\r\n");
+		  else printf("Read error\r\n");
+	  }
+
+	  HAL_Delay(200);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
