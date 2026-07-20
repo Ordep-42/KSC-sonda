@@ -176,6 +176,22 @@ HAL_StatusTypeDef BMP280_SetConfig(BMP280_Handle_t *hbmp, uint8_t config) {
 	return HAL_OK;
 }
 
+uint8_t BMP280_CtrlEncode(const BMP280_Ctrl_t *cfg) {
+	if (cfg == NULL) return 0;
+
+	return ((uint8_t)cfg->osrs_t  << 5) |
+		   ((uint8_t)cfg->osrs_p  << 2) |
+		   ((uint8_t)cfg->mode);
+}
+
+uint8_t BMP280_ConfigEncode(const BMP280_Config_t *cfg) {
+	if (cfg == NULL) return 0;
+
+	return ((uint8_t)cfg->standby << 5) |
+		   ((uint8_t)cfg->filter  << 2) |
+		   ((uint8_t)cfg->spi3w_enable);
+}
+
 HAL_StatusTypeDef BMP280_ReadData(BMP280_Handle_t *hbmp, BMP280_Data_t *data) {
 	if (hbmp == NULL || data == NULL) {
 		return HAL_ERROR;
@@ -196,4 +212,15 @@ HAL_StatusTypeDef BMP280_Reset(BMP280_Handle_t *hbmp) {
 
 	uint8_t cmd = BMP280_RESET;
 	return bmp_write_reg(hbmp, BMP280_REG_RESET, &cmd, 1);
+}
+
+HAL_StatusTypeDef BMP280_DeInit(BMP280_Handle_t *hbmp) {
+    if (hbmp == NULL)
+        return HAL_ERROR;
+
+    (void)BMP280_Reset(hbmp);
+
+    memset(hbmp, 0, sizeof(*hbmp));
+
+    return HAL_OK;
 }

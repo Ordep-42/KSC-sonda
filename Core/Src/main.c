@@ -46,8 +46,6 @@
 
 // BMP280
 #define BMP280_ADDRESS (0x76 << 1) // 0b1110110; Address[7-bit]Write/Read[1-bit]
-#define BMP280_CTRL ((3 << 5) | (1 << 2) | (3)) // osr_t = 4; osr_p = 1,; mode = normal;
-#define BMP280_CONFIG (1 << 5) | (3 << 2)// t_sb = 001; iir = 4; spi = 0;
 #define BMP280_DRDY (1<<1)
 
 // QMC5883L
@@ -156,26 +154,36 @@ int main(void)
   AHT_TriggerMeasurement(&haht);
   
   BMP280_Init(&hbmp, &hi2c1, BMP280_ADDRESS);
-  BMP280_SetMode(&hbmp, BMP280_CTRL);
-  BMP280_SetConfig(&hbmp, BMP280_CONFIG);
+  BMP280_Ctrl_t bmp_ctrl_cfg = {
+      .osrs_t = BMP280_OSRS_X4,
+      .osrs_p = BMP280_OSRS_X1,
+      .mode   = BMP280_MODE_NORMAL
+  };
+  BMP280_Config_t bmp_config_cfg = {
+      .standby = BMP280_STANDBY_62_5MS,
+      .filter  = BMP280_FILTER_4,
+      .spi3w_enable = 0
+  };
+
+  BMP280_SetMode(&hbmp, BMP280_CtrlEncode(&bmp_ctrl_cfg));
+  BMP280_SetConfig(&hbmp, BMP280_ConfigEncode(&bmp_config_cfg));
   
 	HAL_TIM_Base_Start_IT(&htim4);
 
 	QMC5883L_Init(&hqmc, &hi2c1, QMC5883L_ADDRESS);
-
-	QMC5883L_Ctrl1_t ctrl1_cfg = {
+	QMC5883L_Ctrl1_t qmc_ctrl1_cfg = {
 	    .osr = QMC5883L_OSR_128,
 	    .range = QMC5883L_RANGE_2G,
 	    .odr = QMC5883L_ODR_10HZ,
 	    .mode = QMC5883L_CONTINUOUS
 	};
-	QMC5883L_SetCtrl1(&hqmc, QMC5883L_Ctrl1Encode(&ctrl1_cfg));
-
-	QMC5883L_Ctrl2_t ctrl2_cfg = {
+	QMC5883L_Ctrl2_t qmc_ctrl2_cfg = {
 		.interrupt = QMC5883L_INT_ENABLE,
 		.roll_pointer = QMC5883L_ROL_ENABLE
 	};
-	QMC5883L_SetCtrl2(&hqmc, QMC5883L_Ctrl2Encode(&ctrl2_cfg));
+
+	QMC5883L_SetCtrl1(&hqmc, QMC5883L_Ctrl1Encode(&qmc_ctrl1_cfg));
+	QMC5883L_SetCtrl2(&hqmc, QMC5883L_Ctrl2Encode(&qmc_ctrl2_cfg));
 	hqmc.events |= QMC_EVT_DATA_READY;
   /* USER CODE END 2 */
 
