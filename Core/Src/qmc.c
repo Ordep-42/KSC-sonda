@@ -71,7 +71,7 @@ HAL_StatusTypeDef QMC5883L_Init(QMC5883L_Handle_t *hqmc, I2C_HandleTypeDef *hi2c
 	memset(hqmc, 0, sizeof(*hqmc));
 	hqmc->hi2c = hi2c;
 	hqmc->address = dev_address;
-	hqmc->timeout;
+	hqmc->timeout = timeout;
 
 	HAL_StatusTypeDef status;
 	uint8_t init_cmd = QMC5883L_INIT;
