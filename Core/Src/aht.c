@@ -23,10 +23,11 @@ static const uint8_t aht10_measure_cmd[3] = {
     AHT10_PARAM_NOP
 };
 
-HAL_StatusTypeDef AHT_Init(AHT_Handle_t *haht, I2C_HandleTypeDef *hi2c, const uint8_t dev_addr) {
-	if (haht == NULL || hi2c == NULL) return HAL_ERROR;
+HAL_StatusTypeDef AHT_Init(AHT_Handle_t *haht, I2C_HandleTypeDef *hi2c, const uint8_t dev_addr, uint32_t timeout) {
+	if (haht == NULL || hi2c == NULL || timeout == 0) return HAL_ERROR;
 	haht->hi2c = hi2c;
 	haht->addr = dev_addr;
+	haht->timeout = timeout;
 	return HAL_OK;
 }
 
@@ -39,7 +40,7 @@ HAL_StatusTypeDef AHT_ReadData(AHT_Handle_t *haht, AHT_Data_t *data) {
 			  haht->addr,
 			  rx_buf,
 			  6,
-			  HAL_MAX_DELAY);
+			  haht->timeout);
 
 	if (status != HAL_OK) return status;
 
@@ -75,7 +76,7 @@ HAL_StatusTypeDef AHT_TriggerMeasurement(AHT_Handle_t *haht)
         haht->addr,
         (uint8_t*)aht10_measure_cmd,
         sizeof(aht10_measure_cmd),
-		HAL_MAX_DELAY
+		haht->timeout
     );
 
    if (status != HAL_OK) return status;

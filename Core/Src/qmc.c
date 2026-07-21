@@ -48,11 +48,11 @@ static int16_t qmc_to_uT(int16_t raw, uint16_t sensitivity)
 
 static HAL_StatusTypeDef qmc_read_reg(QMC5883L_Handle_t *hqmc, uint8_t reg, uint8_t *data, const uint16_t len) {
 	HAL_StatusTypeDef status;
-	status = HAL_I2C_Master_Transmit(hqmc->hi2c, hqmc->address, &reg, 1, HAL_MAX_DELAY);
+	status = HAL_I2C_Master_Transmit(hqmc->hi2c, hqmc->address, &reg, 1, hqmc->timeout);
 
 	if (status != HAL_OK) return status;
 
-	return HAL_I2C_Master_Receive(hqmc->hi2c, hqmc->address, data, len, HAL_MAX_DELAY);
+	return HAL_I2C_Master_Receive(hqmc->hi2c, hqmc->address, data, len, hqmc->timeout);
 }
 
 static HAL_StatusTypeDef qmc_write_reg(QMC5883L_Handle_t *hqmc, const uint8_t reg, uint8_t *data, const uint16_t len) {
@@ -60,17 +60,18 @@ static HAL_StatusTypeDef qmc_write_reg(QMC5883L_Handle_t *hqmc, const uint8_t re
 	tx[0] = reg;
 	memcpy(&tx[1], data, len);
 
-	return HAL_I2C_Master_Transmit(hqmc->hi2c, hqmc->address, tx, len+1, HAL_MAX_DELAY);
+	return HAL_I2C_Master_Transmit(hqmc->hi2c, hqmc->address, tx, len+1, hqmc->timeout);
 }
 
-HAL_StatusTypeDef QMC5883L_Init(QMC5883L_Handle_t *hqmc, I2C_HandleTypeDef *hi2c, uint8_t dev_address) {
-	if (hqmc == NULL || hi2c == NULL) {
+HAL_StatusTypeDef QMC5883L_Init(QMC5883L_Handle_t *hqmc, I2C_HandleTypeDef *hi2c, uint8_t dev_address, uint32_t timeout) {
+	if (hqmc == NULL || hi2c == NULL || timeout == 0) {
 		return HAL_ERROR;
 	}
 
 	memset(hqmc, 0, sizeof(*hqmc));
 	hqmc->hi2c = hi2c;
 	hqmc->address = dev_address;
+	hqmc->timeout;
 
 	HAL_StatusTypeDef status;
 	uint8_t init_cmd = QMC5883L_INIT;

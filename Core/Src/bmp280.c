@@ -22,6 +22,7 @@
 #define BMP280_CHIPID 0x58
 #define BMP280_RESET 0xB6
 #define BMP280_RAW_DATA_LEN 6
+#define BMP280_CAL_DATA_LEN 26
 
 static uint16_t bmp_u16_le(const uint8_t *buf) {
 	return (uint16_t)buf[0] |
@@ -75,21 +76,21 @@ static uint32_t compensate_pres(BMP280_CalParams_t *calib, const int32_t adc_P_r
 	return pres;
 }
 
-static HAL_StatusTypeDef bmp_read_reg(BMP280_Handle_t *hbmp, const uint8_t reg, uint8_t *data, const uint16_t len) {
+static HAL_StatusTypeDef bmp_read_reg(BMP280_Handle_t *hbmp, uint8_t reg, uint8_t *data, const uint16_t len) {
 	HAL_StatusTypeDef status;
-	status = HAL_I2C_Master_Transmit(hbmp->hi2c, hbmp->address, &reg, 1, HAL_MAX_DELAY);
+	status = HAL_I2C_Master_Transmit(hbmp->hi2c, hbmp->address, &reg, 1, hbmp->timeout);
 
 	if (status != HAL_OK) return status;
 
-	return HAL_I2C_Master_Receive(hbmp->hi2c, hbmp->address, data, len, HAL_MAX_DELAY);
+	return HAL_I2C_Master_Receive(hbmp->hi2c, hbmp->address, data, len, hbmp->timeout);
 }
 
-static HAL_StatusTypeDef bmp_write_reg(BMP280_Handle_t *hbmp, const uint8_t reg, uint8_t *data, const uint16_t len) {
+static HAL_StatusTypeDef bmp_write_reg(BMP280_Handle_t *hbmp, uint8_t reg, uint8_t *data, const uint16_t len) {
 	uint8_t tx[len + 1];
 	tx[0] = reg;
 	memcpy(&tx[1], data, len);
 
-	return HAL_I2C_Master_Transmit(hbmp->hi2c, hbmp->address, tx, len+1, HAL_MAX_DELAY);
+	return HAL_I2C_Master_Transmit(hbmp->hi2c, hbmp->address, tx, len+1, hbmp->timeout);
 }
 
 static HAL_StatusTypeDef bmp_read_raw_data(BMP280_Handle_t *hbmp) {
@@ -108,8 +109,8 @@ static HAL_StatusTypeDef bmp_read_calibration(BMP280_Handle_t *hbmp) {
 	if (hbmp == NULL) return HAL_ERROR;
 
 	HAL_StatusTypeDef status;
-	uint8_t calib_raw[26];
-	status = bmp_read_reg(hbmp, BMP280_REG_CAL, calib_raw, sizeof(calib_raw));
+	uint8_t calib_raw[BMP280_CAL_DATA_LEN];
+	status = bmp_read_reg(hbmp, BMP280_REG_CAL, calib_raw, BMP280_CAL_DATA_LEN);
 	if (status != HAL_OK) return status;
 
 	hbmp->calib.dig_T1 = bmp_u16_le(&calib_raw[0]);
@@ -128,12 +129,13 @@ static HAL_StatusTypeDef bmp_read_calibration(BMP280_Handle_t *hbmp) {
 	return HAL_OK;
 }
 
-HAL_StatusTypeDef BMP280_Init(BMP280_Handle_t *hbmp, I2C_HandleTypeDef *hi2c, uint8_t dev_address) {
-	if (hbmp == NULL || hi2c == NULL) {
+HAL_StatusTypeDef BMP280_Init(BMP280_Handle_t *hbmp, I2C_HandleTypeDef *hi2c, uint8_t dev_address, uint32_t timeout) {
+	if (hbmp == NULL || hi2c == NULL || timeout == 0) {
 		return HAL_ERROR;
 	}
 	hbmp->hi2c = hi2c;
 	hbmp->address = dev_address;
+	hbmp->timeout = timeout;
 	uint8_t chipid;
 	HAL_StatusTypeDef status;
 	status = bmp_read_reg(hbmp, BMP280_REG_CHIPID, &chipid, 1);

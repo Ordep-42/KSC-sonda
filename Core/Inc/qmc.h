@@ -66,6 +66,7 @@ typedef enum {
 typedef struct {
 	I2C_HandleTypeDef *hi2c;
 
+	uint32_t timeout;
 	uint8_t address;
 	uint8_t ctrl1_reg;
 	uint8_t ctrl2_reg;
@@ -81,7 +82,7 @@ typedef struct {
 	int16_t z_axis;
 } QMC5883L_Data_t;
 
-HAL_StatusTypeDef QMC5883L_Init(QMC5883L_Handle_t *hqmc, I2C_HandleTypeDef *hi2c, uint8_t dev_address);
+HAL_StatusTypeDef QMC5883L_Init(QMC5883L_Handle_t *hqmc, I2C_HandleTypeDef *hi2c, uint8_t dev_address, uint32_t timeout);
 HAL_StatusTypeDef QMC5883L_SetCtrl1(QMC5883L_Handle_t *hqmc, uint8_t ctrl1);
 HAL_StatusTypeDef QMC5883L_SetCtrl2(QMC5883L_Handle_t *hqmc, uint8_t ctrl2);
 uint8_t QMC5883L_Ctrl1Encode(const QMC5883L_Ctrl1_t *cfg);

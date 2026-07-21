@@ -40,6 +40,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define I2C_SENSOR_TIMEOUT 100
+
 // AHT10
 #define AHT10_ADDRESS (0x38 << 1) // 0b1110000; Address[7-bit]Write/Read[1-bit]
 #define AHT10_DRDY 1
@@ -150,10 +152,10 @@ int main(void)
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 
-  AHT_Init(&haht, &SENSOR_I2C, AHT10_ADDRESS);
+  AHT_Init(&haht, &SENSOR_I2C, AHT10_ADDRESS, I2C_SENSOR_TIMEOUT);
   AHT_TriggerMeasurement(&haht);
   
-  BMP280_Init(&hbmp, &hi2c1, BMP280_ADDRESS);
+  BMP280_Init(&hbmp, &hi2c1, BMP280_ADDRESS, I2C_SENSOR_TIMEOUT);
   BMP280_Ctrl_t bmp_ctrl_cfg = {
       .osrs_t = BMP280_OSRS_X4,
       .osrs_p = BMP280_OSRS_X1,
@@ -170,7 +172,7 @@ int main(void)
   
 	HAL_TIM_Base_Start_IT(&htim4);
 
-	QMC5883L_Init(&hqmc, &hi2c1, QMC5883L_ADDRESS);
+	QMC5883L_Init(&hqmc, &hi2c1, QMC5883L_ADDRESS, I2C_SENSOR_TIMEOUT);
 	QMC5883L_Ctrl1_t qmc_ctrl1_cfg = {
 	    .osr = QMC5883L_OSR_128,
 	    .range = QMC5883L_RANGE_2G,

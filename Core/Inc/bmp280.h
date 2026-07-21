@@ -77,6 +77,7 @@ typedef struct {
 typedef struct {
 	BMP280_CalParams_t calib;
 
+	uint32_t timeout;
 	uint8_t address;
 	uint8_t status;
 	uint8_t ctrl_mode;
@@ -92,7 +93,7 @@ typedef struct {
 	uint32_t pres;
 } BMP280_Data_t;
 
-HAL_StatusTypeDef BMP280_Init(BMP280_Handle_t *hbmp, I2C_HandleTypeDef *hi2c, uint8_t dev_address);
+HAL_StatusTypeDef BMP280_Init(BMP280_Handle_t *hbmp, I2C_HandleTypeDef *hi2c, uint8_t dev_address, uint32_t timeout);
 HAL_StatusTypeDef BMP280_SetMode(BMP280_Handle_t *hbmp, uint8_t mode);
 HAL_StatusTypeDef BMP280_SetConfig(BMP280_Handle_t *hbmp, uint8_t config);
 uint8_t BMP280_CtrlEncode(const BMP280_Ctrl_t *cfg);
