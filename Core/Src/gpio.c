@@ -53,7 +53,7 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, EBYTE_M1_Pin|EBYTE_M0_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, LORA_M1_Pin|LORA_M0_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : STATUS_LED_Pin */
   GPIO_InitStruct.Pin = STATUS_LED_Pin;
@@ -62,14 +62,14 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(STATUS_LED_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : EBYTE_AUX_Pin */
-  GPIO_InitStruct.Pin = EBYTE_AUX_Pin;
+  /*Configure GPIO pin : LORA_AUX_Pin */
+  GPIO_InitStruct.Pin = LORA_AUX_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(EBYTE_AUX_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(LORA_AUX_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : EBYTE_M1_Pin EBYTE_M0_Pin */
-  GPIO_InitStruct.Pin = EBYTE_M1_Pin|EBYTE_M0_Pin;
+  /*Configure GPIO pins : LORA_M1_Pin LORA_M0_Pin */
+  GPIO_InitStruct.Pin = LORA_M1_Pin|LORA_M0_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
