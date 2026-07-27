@@ -12,6 +12,8 @@
 #define EBYTE_MODEL_E22   0  // Define 1 se estiver usando a família E22 (SX1262)
 #define EBYTE_MODEL_E220  1  // Define 1 se estiver usando a família E220 (LLCC68)
 
+#define EBYTE_AUX_WAIT_MS 3  // 3ms de espera após o pino AUX subir
+
 #if (!EBYTE_MODEL_E22 && !EBYTE_MODEL_E220) || (EBYTE_MODEL_E22 && EBYTE_MODEL_E220)
 	#error "You must define exactly one EBYTE module target (E22 or E220)!"
 #endif

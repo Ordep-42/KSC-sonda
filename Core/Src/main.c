@@ -27,10 +27,12 @@
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "aht.h"
 #include "bmp280.h"
 #include "qmc.h"
+#include "ebyte.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -53,6 +55,13 @@
 // QMC5883L
 #define QMC5883L_ADDRESS (0x0D << 1) // 0b0001101; Address[7-bit]Write/Read[1-bit]
 
+// EBYTE Radio
+#define GS_CHAN 0x46
+#define GS_ADDR 0x1A2B
+#define RADIO_TX_MS 900
+#define STATUS_BLINK_MS 100
+#define EBYTE_PACKET_MAX_LEN 128
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -72,8 +81,9 @@ BMP280_Data_t bmp_data;
 QMC5883L_Handle_t hqmc;
 QMC5883L_Data_t mag_data;
 
-
 uint8_t sensors_drdy = 0;
+uint8_t status_led = 0;
+uint32_t status_led_timestamp = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -153,6 +163,20 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
+  EBYTE_Handle_t hradio = {
+		  .huart = &RADIO_UART,
+		  .radio_timeout = 500,
+		  .uart_timeout = 100,
+
+		  .m0_gpio_port = LORA_M0_GPIO_Port,
+		  .m0_pin = LORA_M0_Pin,
+		  .m1_gpio_port = LORA_M1_GPIO_Port,
+		  .m1_pin = LORA_M1_Pin,
+
+		  .aux_gpio_port = LORA_AUX_GPIO_Port,
+		  .aux_pin = LORA_AUX_Pin
+  };
+
   AHT_Init(&haht, &SENSOR_I2C, AHT10_ADDRESS, I2C_SENSOR_TIMEOUT);
   AHT_TriggerMeasurement(&haht);
   
@@ -188,6 +212,10 @@ int main(void)
 	QMC5883L_SetCtrl1(&hqmc, QMC5883L_Ctrl1Encode(&qmc_ctrl1_cfg));
 	QMC5883L_SetCtrl2(&hqmc, QMC5883L_Ctrl2Encode(&qmc_ctrl2_cfg));
 	hqmc.events |= QMC_EVT_DATA_READY;
+
+	EBYTE_Init(&hradio);
+	uint32_t last_radio_tx = 0;
+	static uint32_t seq = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -196,55 +224,55 @@ int main(void)
 	{
 	  if (sensors_drdy & AHT10_DRDY) {
 		  if (AHT_ReadData(&haht, &aht_data) == HAL_OK) {
-
 			  sensors_drdy &= ~AHT10_DRDY;
-			  printf("=============================\r\n"
-					 "TEMP: %d.%02d°C\tHUMI: %u.%02u%%\r\n",
-					 aht_data.temp / 100, abs(aht_data.temp % 100),
-					 aht_data.humi / 100, aht_data.humi % 100);
-
 			  AHT_TriggerMeasurement(&haht);
-        HAL_TIM_Base_Start_IT(&htim4);
-		  } 
-	  } if (sensors_drdy & BMP280_DRDY) {
-		  if (BMP280_ReadData(&hbmp, &bmp_data) == HAL_OK) {
-
-			sensors_drdy &= ~BMP280_DRDY;
-			printf("=============================\r\n"
-				   "TEMP: %ld.%02ld°C\tPRES: %lu.%02luhPa\r\n",
-				   bmp_data.temp / 100, labs(bmp_data.temp % 100),
-				   bmp_data.pres / 100, labs(bmp_data.pres % 100));
+			  HAL_TIM_Base_Start_IT(&htim4);
 		  }
+	  }
+	  if (sensors_drdy & BMP280_DRDY) {
+		  if (BMP280_ReadData(&hbmp, &bmp_data) == HAL_OK)
+			sensors_drdy &= ~BMP280_DRDY;
 	  }
 
 	  if (hqmc.events & QMC_EVT_DATA_READY){
 		  hqmc.events &= ~QMC_EVT_DATA_READY;
-
 		  HAL_StatusTypeDef status = QMC5883L_ReadData(&hqmc, &mag_data);
 
 		  if (status == HAL_OK) {
 			  int16_t temp;
 			  (void)QMC5883L_ReadTemp(&hqmc, &temp);
-			  printf("=============================\r\n"
-					 "X:%d uT  Y:%d uT  Z:%d uT\r\n"
-					 "TEMP: %d.%dºC\r\n",
-					 mag_data.x_axis,
-					 mag_data.y_axis,
-					 mag_data.z_axis,
-					 temp/10,
-					 abs(temp % 10));
-
 
 			  if (hqmc.events & QMC_EVT_OVERFLOW) {
 				  printf("OVERFLOW!\r\n");
 				  hqmc.events &= ~QMC_EVT_OVERFLOW;
 			  }
 		  }
-		  else if(status == HAL_BUSY) printf("DRDY not ready\r\n");
-		  else printf("Read error\r\n");
 	  }
 
-	  HAL_Delay(200);
+	  if (HAL_GetTick() - last_radio_tx >= RADIO_TX_MS) {
+		  EBYTE_WakeUp(&hradio);
+
+	      last_radio_tx = HAL_GetTick();
+	      char msg[96];
+	      snprintf(msg, sizeof(msg), "SEQ:%lu,UPTIME:%lu,TA:%d.%02d,H:%u.%02u,TB:%ld.%02ld,P:%lu.%02lu;\r\n",
+									 seq++, last_radio_tx,
+									 aht_data.temp / 100, abs(aht_data.temp % 100),
+									 aht_data.humi / 100, aht_data.humi % 100,
+									 bmp_data.temp / 100, labs(bmp_data.temp % 100),
+									 bmp_data.pres / 100, labs(bmp_data.pres % 100));
+
+	      if (EBYTE_Transmit(&hradio, GS_ADDR, GS_CHAN, (uint8_t *)msg, strlen(msg)) == EBYTE_OK) {
+	    	  EBYTE_Sleep(&hradio);
+	    	  status_led = 1;
+	    	  status_led_timestamp = HAL_GetTick();
+	    	  HAL_GPIO_WritePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin, GPIO_PIN_RESET);
+	      }
+	  }
+	  if(status_led && HAL_GetTick() - status_led_timestamp >= STATUS_BLINK_MS) {
+	      status_led = 0;
+	      HAL_GPIO_WritePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin, GPIO_PIN_SET);
+	  }
+	  HAL_Delay(1);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
