@@ -22,10 +22,20 @@ typedef enum {
 	EBYTE_TIMEOUT
 } EBYTE_Status_t;
 
+
+typedef enum {
+	EBYTE_IDLE,
+	EBYTE_SLEEP,
+	EBYTE_WAIT_WAKE,
+	EBYTE_WAIT_SLEEP,
+	EBYTE_WAIT_UART,
+	EBYTE_WAIT_AUX
+} EBYTE_State_t;
+
 typedef struct {
 	UART_HandleTypeDef *huart;
 	uint32_t radio_timeout;
-	uint32_t uart_timeout;
+	volatile EBYTE_State_t state;
 
 	GPIO_TypeDef *m0_gpio_port;
 	uint16_t m0_pin;
@@ -40,5 +50,7 @@ EBYTE_Status_t EBYTE_Init(EBYTE_Handle_t *dev);
 EBYTE_Status_t EBYTE_WakeUp(EBYTE_Handle_t *dev);
 EBYTE_Status_t EBYTE_Sleep(EBYTE_Handle_t *dev);
 EBYTE_Status_t EBYTE_Transmit(EBYTE_Handle_t *dev, const uint16_t target_addr, const uint8_t target_chan, const uint8_t *data, uint16_t size);
+void EBYTE_TxCpltCallback(EBYTE_Handle_t *dev, UART_HandleTypeDef *huart);
+void EBYTE_AuxCallback(EBYTE_Handle_t *dev);
 
 #endif /* INC_EBYTE_H_ */

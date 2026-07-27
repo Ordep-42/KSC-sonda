@@ -66,10 +66,9 @@ void Error_Handler(void);
 #define STATUS_LED_GPIO_Port GPIOC
 #define LORA_AUX_Pin GPIO_PIN_12
 #define LORA_AUX_GPIO_Port GPIOB
-#define LORA_M1_Pin GPIO_PIN_13
-#define LORA_M1_GPIO_Port GPIOB
-#define LORA_M0_Pin GPIO_PIN_14
-#define LORA_M0_GPIO_Port GPIOB
+#define LORA_AUX_EXTI_IRQn EXTI15_10_IRQn
+#define LORA_MODE_Pin GPIO_PIN_13
+#define LORA_MODE_GPIO_Port GPIOB
 #define QMC_DRDY_Pin GPIO_PIN_5
 #define QMC_DRDY_GPIO_Port GPIOB
 #define QMC_DRDY_EXTI_IRQn EXTI9_5_IRQn

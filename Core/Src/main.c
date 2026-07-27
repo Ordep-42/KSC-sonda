@@ -37,7 +37,12 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+typedef enum {
+    TX_IDLE,
+    TX_WAKE,
+    TX_SEND,
+    TX_SLEEP
+} TxSequence_t;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -58,9 +63,8 @@
 // EBYTE Radio
 #define GS_CHAN 0x46
 #define GS_ADDR 0x1A2B
-#define RADIO_TX_MS 900
+#define RADIO_TX_MS 1000
 #define STATUS_BLINK_MS 100
-#define EBYTE_PACKET_MAX_LEN 128
 
 /* USER CODE END PD */
 
@@ -81,6 +85,10 @@ BMP280_Data_t bmp_data;
 QMC5883L_Handle_t hqmc;
 QMC5883L_Data_t mag_data;
 
+EBYTE_Handle_t hradio;
+TxSequence_t radio_seq = TX_IDLE;
+char radio_msg[96];
+
 uint8_t sensors_drdy = 0;
 uint8_t status_led = 0;
 uint32_t status_led_timestamp = 0;
@@ -95,6 +103,7 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 // Send printf to uart1
+#ifdef DEBUG_UART
 int _write(int fd, char* ptr, int len) {
   HAL_StatusTypeDef hstatus;
 
@@ -107,6 +116,7 @@ int _write(int fd, char* ptr, int len) {
   }
   return -1;
 }
+#endif
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
@@ -120,10 +130,16 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-    if (GPIO_Pin == QMC_DRDY_Pin)
-    {
+    if (GPIO_Pin == QMC_DRDY_Pin) {
         QMC5883L_OnDataReadyIRQ(&hqmc);
     }
+    if (GPIO_Pin == LORA_AUX_Pin) {
+    	EBYTE_AuxCallback(&hradio);
+    }
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
+	EBYTE_TxCpltCallback(&hradio, huart);
 }
 /* USER CODE END 0 */
 
@@ -163,15 +179,14 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
-  EBYTE_Handle_t hradio = {
+  hradio = (EBYTE_Handle_t){
 		  .huart = &RADIO_UART,
 		  .radio_timeout = 500,
-		  .uart_timeout = 100,
 
-		  .m0_gpio_port = LORA_M0_GPIO_Port,
-		  .m0_pin = LORA_M0_Pin,
-		  .m1_gpio_port = LORA_M1_GPIO_Port,
-		  .m1_pin = LORA_M1_Pin,
+		  .m0_gpio_port = LORA_MODE_GPIO_Port,
+		  .m0_pin = LORA_MODE_Pin,
+		  .m1_gpio_port = LORA_MODE_GPIO_Port,
+		  .m1_pin = LORA_MODE_Pin,
 
 		  .aux_gpio_port = LORA_AUX_GPIO_Port,
 		  .aux_pin = LORA_AUX_Pin
@@ -214,6 +229,7 @@ int main(void)
 	hqmc.events |= QMC_EVT_DATA_READY;
 
 	EBYTE_Init(&hradio);
+	EBYTE_Sleep(&hradio);
 	uint32_t last_radio_tx = 0;
 	static uint32_t seq = 0;
   /* USER CODE END 2 */
@@ -243,31 +259,52 @@ int main(void)
 			  (void)QMC5883L_ReadTemp(&hqmc, &temp);
 
 			  if (hqmc.events & QMC_EVT_OVERFLOW) {
-				  printf("OVERFLOW!\r\n");
+				  //overflow!
 				  hqmc.events &= ~QMC_EVT_OVERFLOW;
 			  }
 		  }
 	  }
 
-	  if (HAL_GetTick() - last_radio_tx >= RADIO_TX_MS) {
-		  EBYTE_WakeUp(&hradio);
-
-	      last_radio_tx = HAL_GetTick();
-	      char msg[96];
-	      snprintf(msg, sizeof(msg), "SEQ:%lu,UPTIME:%lu,TA:%d.%02d,H:%u.%02u,TB:%ld.%02ld,P:%lu.%02lu;\r\n",
+	  if ((HAL_GetTick() - last_radio_tx >= RADIO_TX_MS) && radio_seq == TX_IDLE) {
+		  last_radio_tx = HAL_GetTick();
+	      snprintf(radio_msg, sizeof(radio_msg), "SEQ:%lu,UPTIME:%lu,TA:%d.%02d,H:%u.%02u,TB:%ld.%02ld,P:%lu.%02lu;\r\n",
 									 seq++, last_radio_tx,
 									 aht_data.temp / 100, abs(aht_data.temp % 100),
 									 aht_data.humi / 100, aht_data.humi % 100,
 									 bmp_data.temp / 100, labs(bmp_data.temp % 100),
 									 bmp_data.pres / 100, labs(bmp_data.pres % 100));
 
-	      if (EBYTE_Transmit(&hradio, GS_ADDR, GS_CHAN, (uint8_t *)msg, strlen(msg)) == EBYTE_OK) {
-	    	  EBYTE_Sleep(&hradio);
-	    	  status_led = 1;
-	    	  status_led_timestamp = HAL_GetTick();
-	    	  HAL_GPIO_WritePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin, GPIO_PIN_RESET);
-	      }
+	      radio_seq = TX_WAKE;
 	  }
+
+	  switch (radio_seq) {
+	  case TX_IDLE:
+		  break;
+
+	  case TX_WAKE:
+		  if (hradio.state == EBYTE_SLEEP) {
+			  EBYTE_WakeUp(&hradio);
+		  } else if (hradio.state == EBYTE_IDLE) {
+			  radio_seq = TX_SEND;
+		  }
+		  break;
+
+	  case TX_SEND:
+		  if (hradio.state == EBYTE_IDLE) {
+			  if (EBYTE_Transmit(&hradio, GS_ADDR, GS_CHAN, (uint8_t *)radio_msg, strlen(radio_msg)) == EBYTE_OK) {
+				  radio_seq = TX_SLEEP;
+				  status_led = 1;
+				  status_led_timestamp = HAL_GetTick();
+				  HAL_GPIO_WritePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin, GPIO_PIN_RESET);
+			  }
+		  }
+		  break;
+
+	  case TX_SLEEP:
+		  if (hradio.state == EBYTE_IDLE) EBYTE_Sleep(&hradio);
+		  else if (hradio.state == EBYTE_SLEEP) radio_seq = TX_IDLE;
+	  }
+
 	  if(status_led && HAL_GetTick() - status_led_timestamp >= STATUS_BLINK_MS) {
 	      status_led = 0;
 	      HAL_GPIO_WritePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin, GPIO_PIN_SET);
