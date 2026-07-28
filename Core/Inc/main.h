@@ -57,12 +57,18 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define I2C_SENSOR_TIMER htim4
 #define SENSOR_I2C hi2c1
 #define GNSS_UART huart1
 #define DEBUG_UART huart3
-#define I2C_SENSOR_TIMER htim4
+#define RADIO_UART huart2
 #define STATUS_LED_Pin GPIO_PIN_13
 #define STATUS_LED_GPIO_Port GPIOC
+#define LORA_AUX_Pin GPIO_PIN_12
+#define LORA_AUX_GPIO_Port GPIOB
+#define LORA_AUX_EXTI_IRQn EXTI15_10_IRQn
+#define LORA_MODE_Pin GPIO_PIN_13
+#define LORA_MODE_GPIO_Port GPIOB
 #define QMC_DRDY_Pin GPIO_PIN_5
 #define QMC_DRDY_GPIO_Port GPIOB
 #define QMC_DRDY_EXTI_IRQn EXTI9_5_IRQn
