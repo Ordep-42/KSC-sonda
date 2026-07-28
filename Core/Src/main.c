@@ -266,9 +266,9 @@ int main(void)
 	  }
 
 	  if ((HAL_GetTick() - last_radio_tx >= RADIO_TX_MS) && radio_seq == TX_IDLE) {
-		  last_radio_tx = HAL_GetTick();
+		  last_radio_tx += RADIO_TX_MS;
 	      snprintf(radio_msg, sizeof(radio_msg), "SEQ:%lu,UPTIME:%lu,TA:%d.%02d,H:%u.%02u,TB:%ld.%02ld,P:%lu.%02lu;\r\n",
-									 seq++, last_radio_tx,
+									 seq++, HAL_GetTick(),
 									 aht_data.temp / 100, abs(aht_data.temp % 100),
 									 aht_data.humi / 100, aht_data.humi % 100,
 									 bmp_data.temp / 100, labs(bmp_data.temp % 100),
