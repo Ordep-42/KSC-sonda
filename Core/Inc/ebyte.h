@@ -37,6 +37,9 @@ typedef struct {
 	uint32_t radio_timeout;
 	volatile EBYTE_State_t state;
 
+	uint8_t tx_buffer[EBYTE_BUFFER_SIZE];
+	uint16_t tx_len;
+
 	GPIO_TypeDef *m0_gpio_port;
 	uint16_t m0_pin;
 	GPIO_TypeDef *m1_gpio_port;

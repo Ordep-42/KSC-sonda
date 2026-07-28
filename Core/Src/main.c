@@ -64,7 +64,7 @@ typedef enum {
 #define GS_CHAN 0x46
 #define GS_ADDR 0x1A2B
 #define RADIO_TX_MS 1000
-#define STATUS_BLINK_MS 100
+#define STATUS_BLINK_MS 50
 
 /* USER CODE END PD */
 

@@ -62,14 +62,14 @@ EBYTE_Status_t EBYTE_Transmit(EBYTE_Handle_t *dev, const uint16_t target_addr, c
 	if (dev->state != EBYTE_IDLE)
 		return EBYTE_BUSY;
 
-	uint8_t tx_buf[3 + size];
-	tx_buf[0] = (uint8_t)((target_addr >> 8) & 0xFF);
-	tx_buf[1] = (uint8_t)(target_addr & 0xFF);
-	tx_buf[2] = target_chan;
-	memcpy(tx_buf + 3, data, size);
+	dev->tx_buffer[0] = (uint8_t)(target_addr >> 8);
+	dev->tx_buffer[1] = (uint8_t)(target_addr);
+	dev->tx_buffer[2] = target_chan;
+	memcpy(&dev->tx_buffer[3], data, size);
+	dev->tx_len = size + 3;
 
 	HAL_StatusTypeDef status;
-	status = HAL_UART_Transmit_IT(dev->huart, tx_buf, 3+size);
+	status = HAL_UART_Transmit_IT(dev->huart, dev->tx_buffer, dev->tx_len);
 	if (status != HAL_OK) {
 	    if (status == HAL_BUSY) return EBYTE_BUSY;
 
