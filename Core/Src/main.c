@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "dma.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -47,8 +48,6 @@
 
 /* USER CODE BEGIN PV */
 GNSS_Handle_t hgnss;
-
-uint8_t header[3] = {0x1A,0x2B,0x46};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -70,6 +69,11 @@ int _write(int fd, char* ptr, int len) {
       return -1;
   }
   return -1;
+}
+
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t offset) {
+    if (huart == hgnss.huart)
+        GNSS_RxCallback(&hgnss, offset);
 }
 /* USER CODE END 0 */
 
@@ -102,6 +106,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USART1_UART_Init();
   MX_USART3_UART_Init();
   MX_USART2_UART_Init();
@@ -109,49 +114,60 @@ int main(void)
   HAL_GPIO_WritePin(LORA_MODE_GPIO_Port, LORA_MODE_Pin, GPIO_PIN_RESET);
   HAL_Delay(5);
   GNSS_Init(&hgnss, &GNSS_UART);
-  printf("\nUART OK!\r\nGNSS OK!\r\n\r\n");
 
-  HAL_Delay(3000);
-  HAL_GPIO_WritePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin, GPIO_PIN_RESET);
-
-  uint32_t last_tx = 0, now = 0;
+  uint32_t last_tx = 0, now = 0, seq = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	now = HAL_GetTick();
-	GNSS_Process(&hgnss);
+	  now = HAL_GetTick();
 
-	if (now - last_tx >= 500) {
-		char nmeabuffer[128];
-		memcpy(nmeabuffer, header, 3);
-		sprintf(&nmeabuffer[3],"%s\r\n", hgnss.rx.line_buf);
-		int32_t lat = hgnss.data.lat_e7, lon = hgnss.data.lon_e7;
-		uint16_t alt = hgnss.data.alt_m;
-		uint8_t sats = hgnss.data.satellites, fix = hgnss.data.fix;
+	  if (now - last_tx >= 1000) {
+		  HAL_GPIO_TogglePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin);
+		  last_tx = now;
+		  uint8_t tx_buffer[128];
 
-		HAL_UART_Transmit(&RADIO_UART, (uint8_t*)nmeabuffer, strlen(nmeabuffer), HAL_MAX_DELAY);
-		HAL_Delay(10);
+		  tx_buffer[0] = 0x1A;
+		  tx_buffer[1] = 0x2B;
+		  tx_buffer[2] = 0x46;
 
-		char smolbuffer[64];
-		memcpy(smolbuffer, header, 3);
-		sprintf(&smolbuffer[3], "Lat: %ld,Lon: %ld,Alt: %u\r\n", lat, lon, alt);
+		  char msg[96];
+		  int len = snprintf(msg, sizeof(msg), "SEQ:%lu,%s\r\n", seq++, hgnss.rx.line_buf);
+		  memcpy(&tx_buffer[3], msg, len);
 
-		HAL_UART_Transmit(&RADIO_UART, (uint8_t*)smolbuffer, strlen(smolbuffer), HAL_MAX_DELAY);
-		HAL_Delay(10);
+		  if (len > 0)
+			  HAL_UART_Transmit(&huart2, tx_buffer, len + 3, HAL_MAX_DELAY);
+	  }
 
-		memset(smolbuffer, 0, sizeof(smolbuffer));
-		memcpy(smolbuffer, header, 3);
-		sprintf(&smolbuffer[3],"Sats: %u,Fix: %u\r\n", sats, fix);
+	  if (hgnss.events & GNSS_EVT_LINE_READY) {
+		  hgnss.events &= ~GNSS_EVT_LINE_READY;
+		  GNSS_Process(&hgnss);
+	  }
 
-		HAL_UART_Transmit(&RADIO_UART, (uint8_t*)smolbuffer, strlen(smolbuffer), HAL_MAX_DELAY);
-		HAL_Delay(10);
+	  if (hgnss.events & GNSS_EVT_FIX_VALID) {
+		  hgnss.events &= ~GNSS_EVT_FIX_VALID;
 
-		last_tx = now;
-		HAL_GPIO_TogglePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin);
-	}
+		  uint8_t tx_buffer[128];
+
+		  tx_buffer[0] = 0x1A;
+		  tx_buffer[1] = 0x2B;
+		  tx_buffer[2] = 0x46;
+
+		  char msg[96];
+		  int len = snprintf(msg, sizeof(msg),
+		                     "SEQ:%lu,LAT:%ld,LON:%ld,SAT:%u,ALT:%u\r\n",
+		                     seq++,
+		                     hgnss.data.lat_e7,
+		                     hgnss.data.lon_e7,
+		                     hgnss.data.satellites,
+		                     hgnss.data.alt_m);
+		  memcpy(&tx_buffer[3], msg, len);
+
+		  if (len > 0)
+		      HAL_UART_Transmit(&huart2, tx_buffer, len + 3, HAL_MAX_DELAY);
+	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -198,9 +214,7 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-	if(huart == &GNSS_UART) GNSS_RxCallback(&hgnss);
-}
+
 /* USER CODE END 4 */
 
 /**

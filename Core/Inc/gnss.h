@@ -44,17 +44,17 @@ typedef struct {
 	uint16_t alt_m; // Altitude em metros
 
     /* RMC - Recommended Minimmum Specific GNS Data */
-    char rmc_status; // Status dos dados do RMC
     uint16_t speed_centi_knot; // Velocidade em centésimos de nó
     uint16_t course_centi_deg; // Curso verdadeiro em centésimos de graus
     uint8_t date_day;
     uint8_t date_month;
     uint8_t date_year;
-    char rmc_mode; // Modo do RMC
 
 	/* VTG - Course over ground, ground speed */
     uint16_t speed_centi_kph;
-    uint8_t  vtg_mode;
+
+    char status; // Status dos dados do GPS
+    char pos_mode; // Modo de posicionamento
 
     /* Estado do driver */
     uint32_t last_fix_tick; // HAL_GetTick() do último fix válido

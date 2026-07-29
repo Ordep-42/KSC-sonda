@@ -15,7 +15,7 @@ static void gnss_parse(GNSS_Handle_t *hgnss, const char *strnmea); // Parser do 
 static void gnss_parse_gga(GNSS_Handle_t *hgnss, const char *strnmea); // Parser para senteças NMEA GGA
 static void gnss_parse_rmc(GNSS_Handle_t *hgnss, const char *strnmea); // Parser para senteças NMEA RMC
 static void gnss_parse_vtg(GNSS_Handle_t *hgnss, const char *strnmea); // Parser para senteças NMEA VTG
-//static void gnss_parse_gll(GNSS_Handle_t *hgnss, const char *strnmea); // Parser para senteças NMEA GLL
+static void gnss_parse_gll(GNSS_Handle_t *hgnss, const char *strnmea); // Parser para senteças NMEA GLL
 
 
 static const char *next_field(const char *strnmea); // Avança o ponteiro para o próximo campo (prox. vírgula)
@@ -93,7 +93,7 @@ static void gnss_parse(GNSS_Handle_t *hgnss, const char *strnmea) {
 	if (!strncmp(strnmea, "$GPGGA", 6) || !strncmp(strnmea, "$GNGGA", 6)) gnss_parse_gga(hgnss, strnmea);
 	else if (!strncmp(strnmea, "$GPRMC", 6) || !strncmp(strnmea, "$GNRMC", 6)) gnss_parse_rmc(hgnss, strnmea);
 	else if (!strncmp(strnmea, "$GPVTG", 6) || !strncmp(strnmea, "$GNVTG", 6)) gnss_parse_vtg(hgnss, strnmea);
-	//else if (!strncmp(strnmea, "$GPGLL", 6) || !strncmp(strnmea, "$GNGLL", 6)) gnss_parse_gll(hgnss, strnmea);
+	else if (!strncmp(strnmea, "$GPGLL", 6) || !strncmp(strnmea, "$GNGLL", 6)) gnss_parse_gll(hgnss, strnmea);
 }
 
 // Avança para o próximo campo na string (coloca o ponteiro para proximo caractere após a vírgula)
@@ -256,7 +256,7 @@ static void gnss_parse_rmc(GNSS_Handle_t *hgnss, const char *strnmea) {
 	strnmea = next_field(strnmea);
 
 	// RMC status
-	data->rmc_status = *strnmea;
+	data->status = *strnmea;
 	strnmea = next_field(strnmea);
 
 	// Latitude e Longitude (Incluso caso leve muito tempo entre uma senteça RMC e GGA)
@@ -289,9 +289,9 @@ static void gnss_parse_rmc(GNSS_Handle_t *hgnss, const char *strnmea) {
 
 	// Modo RMC (NMEA 2.3+)
 	if (*strnmea && *strnmea != '*') {
-		data->rmc_mode = *strnmea;
+		data->pos_mode = *strnmea;
 
-		if (data->rmc_mode == 'A' || data->rmc_mode == 'D') {
+		if (data->pos_mode == 'A' || data->pos_mode == 'D') {
 			hgnss->events |= GNSS_EVT_FIX_VALID;
 			data->last_fix_tick = HAL_GetTick();
 		} else {
@@ -299,7 +299,7 @@ static void gnss_parse_rmc(GNSS_Handle_t *hgnss, const char *strnmea) {
 		}
 	}
 
-	if (data->rmc_status == 'A') {
+	if (data->status == 'A') {
 		hgnss->events |= GNSS_EVT_FIX_VALID;
 		data->last_fix_tick = HAL_GetTick();
 	} else {
@@ -335,9 +335,9 @@ static void gnss_parse_vtg(GNSS_Handle_t *hgnss, const char *strnmea) {
 
 	// Modo VTG (NMEA 2.3+)
 	if (*strnmea && *strnmea != '*') {
-		data->rmc_mode = *strnmea;
+		data->pos_mode = *strnmea;
 
-		if (data->rmc_mode == 'A' || data->rmc_mode == 'D') {
+		if (data->pos_mode == 'A' || data->pos_mode == 'D') {
 			hgnss->events |= GNSS_EVT_FIX_VALID;
 			data->last_fix_tick = HAL_GetTick();
 		} else {
@@ -345,4 +345,56 @@ static void gnss_parse_vtg(GNSS_Handle_t *hgnss, const char *strnmea) {
 		}
 	}
 }
+
+static void gnss_parse_gll(GNSS_Handle_t *hgnss, const char *strnmea) {
+	/* Parser específico para strings GLL.
+	 * Padrão: $xxGLL,ddmm.mmmm,N,dddmm.mmmm,W,hhmmss.sss,C,C*HH
+	 *
+	 * Exemplo: $GPGLL,4717.11364,N,00833.91565,E,092321.00,A,A*60
+	 */
+
+	GNSS_Data_t *data = &hgnss->data;
+	strnmea = next_field(strnmea); // Pula o identificador da sentença ($xxGLL)
+
+	// Latitude e Longitude (Incluso caso leve muito tempo entre uma senteça RMC e GGA)
+	const char *lat_str = strnmea; // Coordenadas
+	strnmea = next_field(strnmea);
+	const char ns = *strnmea; // Hemisfério Norte ou Sul
+	strnmea = next_field(strnmea);
+	data->lat_e7 = degree_e7(lat_str, ns);
+
+	const char *lon_str = strnmea; // Coordenadas
+	strnmea = next_field(strnmea);
+	const char we = *strnmea; // Hemisfério Oeste ou Leste
+	strnmea = next_field(strnmea);
+	data->lon_e7 = degree_e7(lon_str, we);
+
+	// Horário UTC
+	int32_t t = parse_decimal(strnmea, 0); // Pega só a parte inteira hhmmss
+	data->utc_hour = (uint8_t)(t / 10000);
+	data->utc_min = (uint8_t)(t / 10000 % 100);
+	data->utc_sec = (uint8_t)(t % 100);
+	strnmea = next_field(strnmea);
+
+	data->status = *strnmea;
+	strnmea = next_field(strnmea);
+	// Modo RMC (NMEA 2.3+)
+	if (*strnmea && *strnmea != '*') {
+		data->pos_mode = *strnmea;
+		if (data->pos_mode == 'A' || data->pos_mode == 'D') {
+			hgnss->events |= GNSS_EVT_FIX_VALID;
+			data->last_fix_tick = HAL_GetTick();
+		} else {
+			hgnss->events &= ~GNSS_EVT_FIX_VALID;
+		}
+	}
+
+	if (data->status == 'A') {
+		hgnss->events |= GNSS_EVT_FIX_VALID;
+		data->last_fix_tick = HAL_GetTick();
+	} else {
+		hgnss->events &= ~GNSS_EVT_FIX_VALID;
+	}
+}
+
 
