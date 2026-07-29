@@ -57,10 +57,13 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define DEBUG_UART huart3
 #define GNSS_UART huart1
+#define DEBUG_UART huart3
+#define RADIO_UART huart2
 #define STATUS_LED_Pin GPIO_PIN_13
 #define STATUS_LED_GPIO_Port GPIOC
+#define LORA_MODE_Pin GPIO_PIN_13
+#define LORA_MODE_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

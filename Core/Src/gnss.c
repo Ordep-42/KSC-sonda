@@ -8,11 +8,15 @@
 #include "gnss.h"
 #include <string.h>
 
+static inline void gnss_rx_byte(GNSS_Handle_t *hgnss, uint8_t byte);
+
 static uint8_t gnss_validate(const char *strnmea); // Validador do checksum da sentença NMEA
-static void gnss_parse(GNSS_Data_t *data, const char *strnmea); // Parser do tipo de sentença NMEA
-static void gnss_parse_gga(GNSS_Data_t *data, const char *strnmea); // Parser para senteças NMEA GGA
-static void gnss_parse_rmc(GNSS_Data_t *data, const char *strnmea); // Parser para senteças NMEA RMC
-static void gnss_parse_vtg(GNSS_Data_t *data, const char *strnmea); // Parser para senteças NMEA VTG
+static void gnss_parse(GNSS_Handle_t *hgnss, const char *strnmea); // Parser do tipo de sentença NMEA
+static void gnss_parse_gga(GNSS_Handle_t *hgnss, const char *strnmea); // Parser para senteças NMEA GGA
+static void gnss_parse_rmc(GNSS_Handle_t *hgnss, const char *strnmea); // Parser para senteças NMEA RMC
+static void gnss_parse_vtg(GNSS_Handle_t *hgnss, const char *strnmea); // Parser para senteças NMEA VTG
+//static void gnss_parse_gll(GNSS_Handle_t *hgnss, const char *strnmea); // Parser para senteças NMEA GLL
+
 
 static const char *next_field(const char *strnmea); // Avança o ponteiro para o próximo campo (prox. vírgula)
 
@@ -20,47 +24,31 @@ static const char *next_field(const char *strnmea); // Avança o ponteiro para o
 void GNSS_Init(GNSS_Handle_t *hgnss, UART_HandleTypeDef *huart) {
 	memset(hgnss, 0, sizeof(GNSS_Handle_t));
 	hgnss->huart = huart;
-	hgnss->data.state = GNSS_IDLE;
-	HAL_UART_Receive_IT(hgnss->huart, &hgnss->rx.rx_byte, 1);
+	HAL_UARTEx_ReceiveToIdle_DMA(hgnss->huart, hgnss->rx.dma_buf, GNSS_DMA_BUF_SIZE);
 }
 
 void GNSS_Process(GNSS_Handle_t *hgnss) {
-	if (!hgnss->rx.line_ready) return;
-
-	hgnss->rx.line_ready = 0;
-	hgnss->data.state = GNSS_RECEIVING;
-
-	if (gnss_validate(hgnss->rx.line_buf)) gnss_parse(&hgnss->data, hgnss->rx.line_buf);
+	if (gnss_validate(hgnss->rx.line_buf))
+		gnss_parse(hgnss, hgnss->rx.line_buf);
 	else hgnss->data.sentences_err++;
 }
 
-void GNSS_RxCallback(GNSS_Handle_t *hgnss) {
-	uint8_t byte = hgnss->rx.rx_byte;
+void GNSS_RxCallback(GNSS_Handle_t *hgnss, uint16_t offset) {
+	static uint16_t last_offset = 0;
 
-	if (byte == '\n') {
-		hgnss->rx.rx_buf[hgnss->rx.rx_idx] = '\0';
-		memcpy(hgnss->rx.line_buf, hgnss->rx.rx_buf, hgnss->rx.rx_idx + 1);
-		hgnss->rx.rx_idx = 0;
-		hgnss->rx.line_ready = 1;
-	} else if (byte != '\r') {
-		if (hgnss->rx.rx_idx < GNSS_LINE_BUF_SIZE -1) {
-			hgnss->rx.rx_buf[hgnss->rx.rx_idx++] = byte;
-		}
+	if (offset < last_offset) {
+		while (last_offset < GNSS_DMA_BUF_SIZE)
+			gnss_rx_byte(hgnss, hgnss->rx.dma_buf[last_offset++]);
+
+		last_offset = 0;
 	}
 
-	HAL_UART_Receive_IT(hgnss->huart, &hgnss->rx.rx_byte, 1);
-}
-
-uint8_t GNSS_IsFixValid(const GNSS_Handle_t *hgnss) {
-	return ((hgnss->data.fix > 0 && hgnss->data.fix < 3) && hgnss->data.satellites >= 4) ? 1 : 0;
+	while (last_offset < offset)
+		gnss_rx_byte(hgnss, hgnss->rx.dma_buf[last_offset++]);
 }
 
 uint8_t GNSS_IsStale(const GNSS_Handle_t *hgnss) {
 	return (HAL_GetTick() - hgnss->data.last_fix_tick > GNSS_STALE_MS) ? 1 : 0;
-}
-
-GNSS_State_t GNSS_GetState(const GNSS_Handle_t *hgnss) {
-	return hgnss->data.state;
 }
 
 /* Funções privadas */
@@ -85,10 +73,27 @@ static uint8_t gnss_validate(const char *strnmea) {
 	return (calculated == expected) ? 1 : 0;
 }
 
-static void gnss_parse(GNSS_Data_t *data, const char *strnmea) {
-	if (!strncmp(strnmea, "$GPGGA", 6) || !strncmp(strnmea, "$GNGGA", 6)) gnss_parse_gga(data, strnmea);
-	else if (!strncmp(strnmea, "$GPRMC", 6) || !strncmp(strnmea, "$GNRMC", 6)) gnss_parse_rmc(data, strnmea);
-	else if (!strncmp(strnmea, "$GPVTG", 6) || !strncmp(strnmea, "$GNVTG", 6)) gnss_parse_vtg(data, strnmea);
+static inline void gnss_rx_byte(GNSS_Handle_t *hgnss, uint8_t byte) {
+	if (byte == '\r')
+		return;
+
+	if (byte == '\n') {
+		hgnss->rx.line_buf[hgnss->rx.rx_idx] = '\0';
+		hgnss->rx.rx_idx = 0;
+		hgnss->events |= GNSS_EVT_LINE_READY;
+
+		return;
+	}
+
+	if (hgnss->rx.rx_idx < GNSS_LINE_BUF_SIZE - 1)
+		hgnss->rx.line_buf[hgnss->rx.rx_idx++] = (char)byte;
+}
+
+static void gnss_parse(GNSS_Handle_t *hgnss, const char *strnmea) {
+	if (!strncmp(strnmea, "$GPGGA", 6) || !strncmp(strnmea, "$GNGGA", 6)) gnss_parse_gga(hgnss, strnmea);
+	else if (!strncmp(strnmea, "$GPRMC", 6) || !strncmp(strnmea, "$GNRMC", 6)) gnss_parse_rmc(hgnss, strnmea);
+	else if (!strncmp(strnmea, "$GPVTG", 6) || !strncmp(strnmea, "$GNVTG", 6)) gnss_parse_vtg(hgnss, strnmea);
+	//else if (!strncmp(strnmea, "$GPGLL", 6) || !strncmp(strnmea, "$GNGLL", 6)) gnss_parse_gll(hgnss, strnmea);
 }
 
 // Avança para o próximo campo na string (coloca o ponteiro para proximo caractere após a vírgula)
@@ -179,12 +184,14 @@ static int32_t degree_e7(const char *coord, char hemisphere) {
 	return result;
 }
 
-static void gnss_parse_gga(GNSS_Data_t *data, const char *strnmea) {
+static void gnss_parse_gga(GNSS_Handle_t *hgnss, const char *strnmea) {
 	/* Parser específico para strings GGA.
 	 * Padrão: $xxGGA,hhmmss.sss,ddmm.mmmm,N,dddmm.mmmm,W,i,ii,f.f,MMM.MMM,M,MM.MMM,M,f.f,xxxx*HH
 	 *
 	 * Exemplo: $GPGGA,181908.00,3404.7041778,N,07044.3966270,W,4,13,1.00,495.144,M,29.200,M,0.10,0000*40
 	 */
+
+	GNSS_Data_t *data = &hgnss->data;
 
 	strnmea = next_field(strnmea); // Pula o identificador da sentença ($xxGGA)
 
@@ -225,20 +232,21 @@ static void gnss_parse_gga(GNSS_Data_t *data, const char *strnmea) {
 	data->alt_m = (uint16_t)parse_decimal(strnmea, 0); // Pega só a parte inteira, não precisamos da precisão de frações de metros
 	if (data->fix > 0) {
 		data->last_fix_tick = HAL_GetTick();
-		data->state = GNSS_FIX_VALID;
+		hgnss->events |= GNSS_EVT_FIX_VALID;
 	} else {
-		data->state = GNSS_NO_FIX;
+		hgnss->events &= ~GNSS_EVT_FIX_VALID;
 	}
 }
 
-static void gnss_parse_rmc(GNSS_Data_t *data, const char *strnmea) {
+static void gnss_parse_rmc(GNSS_Handle_t *hgnss, const char *strnmea) {
 	/* Parser específico para strings GGA.
 	 * Padrão: $xxRMC,hhmmss.sss,A,ddmm.mmmm,N,dddmm.mmmm,W,ff.ffff,dd.dd,ddMMyy,--,--,C,*HH
 	 *
 	 * Exemplo: $GPRMC,083559.00,A,4717.11437,N,00833.91522,E,0.004,77.52,091202,,,A*57
 	 */
 
-	 strnmea = next_field(strnmea); // Pula o identificador da sentença ($xxRMC)
+	GNSS_Data_t *data = &hgnss->data;
+	strnmea = next_field(strnmea); // Pula o identificador da sentença ($xxRMC)
 
 	// Horário UTC
 	int32_t t = parse_decimal(strnmea, 0); // Pega só a parte inteira hhmmss
@@ -284,29 +292,30 @@ static void gnss_parse_rmc(GNSS_Data_t *data, const char *strnmea) {
 		data->rmc_mode = *strnmea;
 
 		if (data->rmc_mode == 'A' || data->rmc_mode == 'D') {
-			data->state = GNSS_FIX_VALID;
+			hgnss->events |= GNSS_EVT_FIX_VALID;
 			data->last_fix_tick = HAL_GetTick();
 		} else {
-			data->state = GNSS_NO_FIX;
+			hgnss->events &= ~GNSS_EVT_FIX_VALID;
 		}
 	}
 
 	if (data->rmc_status == 'A') {
-		data->state = GNSS_FIX_VALID;
+		hgnss->events |= GNSS_EVT_FIX_VALID;
 		data->last_fix_tick = HAL_GetTick();
 	} else {
-		data->state = GNSS_NO_FIX;
+		hgnss->events &= ~GNSS_EVT_FIX_VALID;
 	}
 }
 
-static void gnss_parse_vtg(GNSS_Data_t *data, const char *strnmea) {
+static void gnss_parse_vtg(GNSS_Handle_t *hgnss, const char *strnmea) {
 	/* Parser específico para strings GGA.
 	 * Padrão: $xxVTG,dd.dd,T,--,M,ff.fff,N,ff.fff,K,C*HH
 	 *
 	 * Exemplo: $GPVTG,77.52,T,,M,0.004,N,0.008,K,A*06
 	 */
 
-	 strnmea = next_field(strnmea); // Pula o identificador da sentença ($xxRMC)
+	GNSS_Data_t *data = &hgnss->data;
+	strnmea = next_field(strnmea); // Pula o identificador da sentença ($xxRMC)
 
 	// Curso verdadeiro em graus * 100
 	data->course_centi_deg = (uint16_t)parse_decimal(strnmea, 2);
@@ -329,10 +338,10 @@ static void gnss_parse_vtg(GNSS_Data_t *data, const char *strnmea) {
 		data->rmc_mode = *strnmea;
 
 		if (data->rmc_mode == 'A' || data->rmc_mode == 'D') {
-			data->state = GNSS_FIX_VALID;
+			hgnss->events |= GNSS_EVT_FIX_VALID;
 			data->last_fix_tick = HAL_GetTick();
 		} else {
-			data->state = GNSS_NO_FIX;
+			hgnss->events &= ~GNSS_EVT_FIX_VALID;
 		}
 	}
 }

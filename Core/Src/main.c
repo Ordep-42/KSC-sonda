@@ -25,6 +25,7 @@
 /* USER CODE BEGIN Includes */
 #include "gnss.h"
 #include <stdio.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -46,6 +47,8 @@
 
 /* USER CODE BEGIN PV */
 GNSS_Handle_t hgnss;
+
+uint8_t header[3] = {0x1A,0x2B,0x46};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -60,7 +63,7 @@ int _write(int fd, char* ptr, int len) {
   HAL_StatusTypeDef hstatus;
 
   if (fd == 1 || fd == 2) {
-    hstatus = HAL_UART_Transmit(&DEBUG_UART, (uint8_t *) ptr, len, HAL_MAX_DELAY);
+    hstatus = HAL_UART_Transmit(&DEBUG_UART, (uint8_t*)ptr, len, HAL_MAX_DELAY);
     if (hstatus == HAL_OK)
       return len;
     else
@@ -101,7 +104,10 @@ int main(void)
   MX_GPIO_Init();
   MX_USART1_UART_Init();
   MX_USART3_UART_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  HAL_GPIO_WritePin(LORA_MODE_GPIO_Port, LORA_MODE_Pin, GPIO_PIN_RESET);
+  HAL_Delay(5);
   GNSS_Init(&hgnss, &GNSS_UART);
   printf("\nUART OK!\r\nGNSS OK!\r\n\r\n");
 
@@ -119,13 +125,29 @@ int main(void)
 	GNSS_Process(&hgnss);
 
 	if (now - last_tx >= 500) {
-		printf("=-=-=-=-=-=-=-=-=-=-=\r\n%s\r\n", hgnss.rx.line_buf);
+		char nmeabuffer[128];
+		memcpy(nmeabuffer, header, 3);
+		sprintf(&nmeabuffer[3],"%s\r\n", hgnss.rx.line_buf);
 		int32_t lat = hgnss.data.lat_e7, lon = hgnss.data.lon_e7;
 		uint16_t alt = hgnss.data.alt_m;
 		uint8_t sats = hgnss.data.satellites, fix = hgnss.data.fix;
 
-		printf("=====================\r\nLat: %ld\r\nLon: %ld\r\nAlt: %u\r\n", lat, lon, alt);
-		printf("=-=-=-=-=-=-=-=-=-=-=\r\nSats: %u\r\nFix: %u\r\n", sats, fix);
+		HAL_UART_Transmit(&RADIO_UART, (uint8_t*)nmeabuffer, strlen(nmeabuffer), HAL_MAX_DELAY);
+		HAL_Delay(10);
+
+		char smolbuffer[64];
+		memcpy(smolbuffer, header, 3);
+		sprintf(&smolbuffer[3], "Lat: %ld,Lon: %ld,Alt: %u\r\n", lat, lon, alt);
+
+		HAL_UART_Transmit(&RADIO_UART, (uint8_t*)smolbuffer, strlen(smolbuffer), HAL_MAX_DELAY);
+		HAL_Delay(10);
+
+		memset(smolbuffer, 0, sizeof(smolbuffer));
+		memcpy(smolbuffer, header, 3);
+		sprintf(&smolbuffer[3],"Sats: %u,Fix: %u\r\n", sats, fix);
+
+		HAL_UART_Transmit(&RADIO_UART, (uint8_t*)smolbuffer, strlen(smolbuffer), HAL_MAX_DELAY);
+		HAL_Delay(10);
 
 		last_tx = now;
 		HAL_GPIO_TogglePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin);
