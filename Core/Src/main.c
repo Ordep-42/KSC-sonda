@@ -78,6 +78,8 @@ typedef enum {
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+GNSS_Handle_t hgnss;
+
 AHT_Handle_t haht;
 AHT_Data_t aht_data;
 
@@ -94,7 +96,6 @@ char radio_msg[96];
 uint8_t sensors_drdy = 0;
 uint8_t status_led = 0;
 uint32_t status_led_timestamp = 0;
-GNSS_Handle_t hgnss;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -126,14 +127,12 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t offset) {
         GNSS_RxCallback(&hgnss, offset);
 }
 
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
- if(htim == &I2C_SENSOR_TIMER)
- {
-	 sensors_drdy |= AHT10_DRDY;
-	 sensors_drdy |= BMP280_DRDY;
-	 HAL_TIM_Base_Stop_IT(&I2C_SENSOR_TIMER);
- }
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	if(htim == &I2C_SENSOR_TIMER) {
+		sensors_drdy |= AHT10_DRDY;
+		sensors_drdy |= BMP280_DRDY;
+		HAL_TIM_Base_Stop_IT(&I2C_SENSOR_TIMER);
+	}
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
@@ -255,9 +254,7 @@ int main(void)
 
 	  if (hgnss.events & GNSS_EVT_FIX_VALID) {
 		  hgnss.events &= ~GNSS_EVT_FIX_VALID;
-
 		  // GPS FIX VALID
-
 	  }
 	  if (sensors_drdy & AHT10_DRDY) {
 		  if (AHT_ReadData(&haht, &aht_data) == HAL_OK) {
