@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "dma.h"
 #include "i2c.h"
 #include "tim.h"
 #include "usart.h"
@@ -127,11 +128,11 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t offset) {
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
- if(htim == &htim4)
+ if(htim == &I2C_SENSOR_TIMER)
  {
 	 sensors_drdy |= AHT10_DRDY;
 	 sensors_drdy |= BMP280_DRDY;
-	 HAL_TIM_Base_Stop_IT(&htim4);
+	 HAL_TIM_Base_Stop_IT(&I2C_SENSOR_TIMER);
  }
 }
 
@@ -179,14 +180,13 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USART1_UART_Init();
   MX_USART3_UART_Init();
   MX_I2C1_Init();
   MX_TIM4_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_GPIO_WritePin(LORA_MODE_GPIO_Port, LORA_MODE_Pin, GPIO_PIN_RESET);
-  HAL_Delay(5);
   GNSS_Init(&hgnss, &GNSS_UART);
 
   hradio = (EBYTE_Handle_t){
@@ -220,7 +220,7 @@ int main(void)
   BMP280_SetMode(&hbmp, BMP280_CtrlEncode(&bmp_ctrl_cfg));
   BMP280_SetConfig(&hbmp, BMP280_ConfigEncode(&bmp_config_cfg));
   
-	HAL_TIM_Base_Start_IT(&htim4);
+	HAL_TIM_Base_Start_IT(&I2C_SENSOR_TIMER);
 
 	QMC5883L_Init(&hqmc, &hi2c1, QMC5883L_ADDRESS, I2C_SENSOR_TIMEOUT);
 	QMC5883L_Ctrl1_t qmc_ctrl1_cfg = {
