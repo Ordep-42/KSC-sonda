@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "dma.h"
 #include "i2c.h"
 #include "tim.h"
 #include "usart.h"
@@ -33,6 +34,7 @@
 #include "bmp280.h"
 #include "qmc.h"
 #include "ebyte.h"
+#include "gnss.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -76,6 +78,8 @@ typedef enum {
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+GNSS_Handle_t hgnss;
+
 AHT_Handle_t haht;
 AHT_Data_t aht_data;
 
@@ -108,7 +112,7 @@ int _write(int fd, char* ptr, int len) {
   HAL_StatusTypeDef hstatus;
 
   if (fd == 1 || fd == 2) {
-    hstatus = HAL_UART_Transmit(&DEBUG_UART, (uint8_t *) ptr, len, HAL_MAX_DELAY);
+    hstatus = HAL_UART_Transmit(&DEBUG_UART, (uint8_t*)ptr, len, HAL_MAX_DELAY);
     if (hstatus == HAL_OK)
       return len;
     else
@@ -118,14 +122,17 @@ int _write(int fd, char* ptr, int len) {
 }
 #endif
 
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
- if(htim == &htim4)
- {
-	 sensors_drdy |= AHT10_DRDY;
-	 sensors_drdy |= BMP280_DRDY;
-	 HAL_TIM_Base_Stop_IT(&htim4);
- }
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t offset) {
+    if (huart == hgnss.huart)
+        GNSS_RxCallback(&hgnss, offset);
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	if(htim == &I2C_SENSOR_TIMER) {
+		sensors_drdy |= AHT10_DRDY;
+		sensors_drdy |= BMP280_DRDY;
+		HAL_TIM_Base_Stop_IT(&I2C_SENSOR_TIMER);
+	}
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
@@ -172,12 +179,14 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USART1_UART_Init();
   MX_USART3_UART_Init();
   MX_I2C1_Init();
   MX_TIM4_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  GNSS_Init(&hgnss, &GNSS_UART);
 
   hradio = (EBYTE_Handle_t){
 		  .huart = &RADIO_UART,
@@ -210,7 +219,7 @@ int main(void)
   BMP280_SetMode(&hbmp, BMP280_CtrlEncode(&bmp_ctrl_cfg));
   BMP280_SetConfig(&hbmp, BMP280_ConfigEncode(&bmp_config_cfg));
   
-	HAL_TIM_Base_Start_IT(&htim4);
+	HAL_TIM_Base_Start_IT(&I2C_SENSOR_TIMER);
 
 	QMC5883L_Init(&hqmc, &hi2c1, QMC5883L_ADDRESS, I2C_SENSOR_TIMEOUT);
 	QMC5883L_Ctrl1_t qmc_ctrl1_cfg = {
@@ -236,8 +245,17 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-	while (1)
-	{
+  while (1)
+  {
+	  if (hgnss.events & GNSS_EVT_LINE_READY) {
+		  hgnss.events &= ~GNSS_EVT_LINE_READY;
+		  GNSS_Process(&hgnss);
+	  }
+
+	  if (hgnss.events & GNSS_EVT_FIX_VALID) {
+		  hgnss.events &= ~GNSS_EVT_FIX_VALID;
+		  // GPS FIX VALID
+	  }
 	  if (sensors_drdy & AHT10_DRDY) {
 		  if (AHT_ReadData(&haht, &aht_data) == HAL_OK) {
 			  sensors_drdy &= ~AHT10_DRDY;
