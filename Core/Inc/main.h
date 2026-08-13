@@ -62,6 +62,7 @@ void Error_Handler(void);
 #define GNSS_UART huart1
 #define DEBUG_UART huart3
 #define RADIO_UART huart2
+#define RADIO_TIMER htim3
 #define STATUS_LED_Pin GPIO_PIN_13
 #define STATUS_LED_GPIO_Port GPIOC
 #define LORA_AUX_Pin GPIO_PIN_12
