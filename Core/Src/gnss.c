@@ -46,11 +46,6 @@ void GNSS_RxCallback(GNSS_Handle_t *hgnss, uint16_t offset) {
 	while (last_offset < offset)
 		gnss_rx_byte(hgnss, hgnss->rx.dma_buf[last_offset++]);
 }
-
-uint8_t GNSS_IsStale(const GNSS_Handle_t *hgnss) {
-	return (HAL_GetTick() - hgnss->data.last_fix_tick > GNSS_STALE_MS) ? 1 : 0;
-}
-
 /* Funções privadas */
 
 // Valida checksum da sentença NMEA com XOR
@@ -231,7 +226,6 @@ static void gnss_parse_gga(GNSS_Handle_t *hgnss, const char *strnmea) {
 	// Altitude em metros
 	data->alt_m = (uint16_t)parse_decimal(strnmea, 0); // Pega só a parte inteira, não precisamos da precisão de frações de metros
 	if (data->fix > 0) {
-		data->last_fix_tick = HAL_GetTick();
 		hgnss->events |= GNSS_EVT_FIX_VALID;
 	} else {
 		hgnss->events &= ~GNSS_EVT_FIX_VALID;
@@ -293,7 +287,6 @@ static void gnss_parse_rmc(GNSS_Handle_t *hgnss, const char *strnmea) {
 
 		if (data->pos_mode == 'A' || data->pos_mode == 'D') {
 			hgnss->events |= GNSS_EVT_FIX_VALID;
-			data->last_fix_tick = HAL_GetTick();
 		} else {
 			hgnss->events &= ~GNSS_EVT_FIX_VALID;
 		}
@@ -301,7 +294,6 @@ static void gnss_parse_rmc(GNSS_Handle_t *hgnss, const char *strnmea) {
 
 	if (data->status == 'A') {
 		hgnss->events |= GNSS_EVT_FIX_VALID;
-		data->last_fix_tick = HAL_GetTick();
 	} else {
 		hgnss->events &= ~GNSS_EVT_FIX_VALID;
 	}
@@ -339,7 +331,6 @@ static void gnss_parse_vtg(GNSS_Handle_t *hgnss, const char *strnmea) {
 
 		if (data->pos_mode == 'A' || data->pos_mode == 'D') {
 			hgnss->events |= GNSS_EVT_FIX_VALID;
-			data->last_fix_tick = HAL_GetTick();
 		} else {
 			hgnss->events &= ~GNSS_EVT_FIX_VALID;
 		}
@@ -383,7 +374,6 @@ static void gnss_parse_gll(GNSS_Handle_t *hgnss, const char *strnmea) {
 		data->pos_mode = *strnmea;
 		if (data->pos_mode == 'A' || data->pos_mode == 'D') {
 			hgnss->events |= GNSS_EVT_FIX_VALID;
-			data->last_fix_tick = HAL_GetTick();
 		} else {
 			hgnss->events &= ~GNSS_EVT_FIX_VALID;
 		}
@@ -391,7 +381,6 @@ static void gnss_parse_gll(GNSS_Handle_t *hgnss, const char *strnmea) {
 
 	if (data->status == 'A') {
 		hgnss->events |= GNSS_EVT_FIX_VALID;
-		data->last_fix_tick = HAL_GetTick();
 	} else {
 		hgnss->events &= ~GNSS_EVT_FIX_VALID;
 	}

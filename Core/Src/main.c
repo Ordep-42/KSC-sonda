@@ -35,6 +35,7 @@
 #include "qmc.h"
 #include "ebyte.h"
 #include "gnss.h"
+#include "telemetry_protocol.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -91,7 +92,8 @@ QMC5883L_Data_t mag_data;
 
 EBYTE_Handle_t hradio;
 TxSequence_t radio_seq = TX_IDLE;
-char radio_msg[96];
+static uint8_t radio_packet[TELEMETRY_FRAME_SIZE];
+static uint16_t seq = 0;
 
 uint8_t sensors_drdy = 0;
 uint8_t status_led = 0;
@@ -101,7 +103,7 @@ uint32_t status_led_timestamp = 0;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-
+static uint8_t app_telemetry_prep(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -240,7 +242,6 @@ int main(void)
 	EBYTE_Init(&hradio);
 	EBYTE_Sleep(&hradio);
 	uint32_t last_radio_tx = 0;
-	static uint32_t seq = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -285,14 +286,11 @@ int main(void)
 
 	  if ((HAL_GetTick() - last_radio_tx >= RADIO_TX_MS) && radio_seq == TX_IDLE) {
 		  last_radio_tx += RADIO_TX_MS;
-	      snprintf(radio_msg, sizeof(radio_msg), "SEQ:%lu,UPTIME:%lu,TA:%d.%02d,H:%u.%02u,TB:%ld.%02ld,P:%lu.%02lu;\r\n",
-									 seq++, HAL_GetTick(),
-									 aht_data.temp / 100, abs(aht_data.temp % 100),
-									 aht_data.humi / 100, aht_data.humi % 100,
-									 bmp_data.temp / 100, labs(bmp_data.temp % 100),
-									 bmp_data.pres / 100, labs(bmp_data.pres % 100));
 
-	      radio_seq = TX_WAKE;
+		  if (app_telemetry_prep() == TELEMETRY_OK) {
+			  seq++;
+			  radio_seq = TX_WAKE;
+		  }
 	  }
 
 	  switch (radio_seq) {
@@ -309,7 +307,7 @@ int main(void)
 
 	  case TX_SEND:
 		  if (hradio.state == EBYTE_IDLE) {
-			  if (EBYTE_Transmit(&hradio, GS_ADDR, GS_CHAN, (uint8_t *)radio_msg, strlen(radio_msg)) == EBYTE_OK) {
+			  if (EBYTE_Transmit(&hradio, GS_ADDR, GS_CHAN, radio_packet, TELEMETRY_FRAME_SIZE) == EBYTE_OK) {
 				  radio_seq = TX_SLEEP;
 				  status_led = 1;
 				  status_led_timestamp = HAL_GetTick();
@@ -374,7 +372,44 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+static uint8_t app_telemetry_prep(void) {
+	TelemetrySystem_t sys_data = {
+			.bat_volt = UINT16_MAX,
+			.sys_flag = 0
+	};
 
+	TelemetryNav_t nav_data = {
+			.lat_e7 = hgnss.data.lat_e7,
+			.lon_e7 = hgnss.data.lon_e7,
+			.alt_m = hgnss.data.alt_m,
+			.speed_ckt = hgnss.data.speed_centi_knot,
+			.course_cdeg = hgnss.data.course_centi_deg,
+			.sat_num = hgnss.data.satellites,
+			.fix = hgnss.data.fix
+	};
+
+	TelemetryAmb_t amb_data = {
+			.temp_aht = aht_data.temp,
+			.humi = aht_data.humi,
+			.pres = bmp_data.pres,
+			.temp_bmp = (int16_t)bmp_data.temp
+	};
+
+	TelemetryMag_t mag_tel = {
+			.mag_x = mag_data.x_axis,
+			.mag_y = mag_data.y_axis,
+			.mag_z = mag_data.z_axis
+	};
+
+	TelemetryData_t tel_pkt = {
+			.amb_data = amb_data,
+			.system_data = sys_data,
+			.nav_data = nav_data,
+			.mag_data = mag_tel
+	};
+
+	return telemetry_serialize(&tel_pkt, seq, HAL_GetTick(), radio_packet, sizeof(radio_packet));
+}
 /* USER CODE END 4 */
 
 /**

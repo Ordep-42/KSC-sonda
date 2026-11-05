@@ -90,6 +90,6 @@ void GNSS_RxCallback(GNSS_Handle_t *hgnss, uint16_t offset);
  * @brief Retorna 1 se o último fix válido é mais antigo que GNSS_STALE_MS, 0 caso contrário.
  * @param hgnss Ponteiro constante para o handle do driver.
  */
-uint8_t GNSS_IsStale(const GNSS_Handle_t *hgnss);
+//uint8_t GNSS_IsStale(const GNSS_Handle_t *hgnss);
 
 #endif /* INC_GNSS_H_ */
