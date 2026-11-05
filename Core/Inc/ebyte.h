@@ -34,7 +34,6 @@ typedef enum {
 
 typedef struct {
 	UART_HandleTypeDef *huart;
-	uint32_t radio_timeout;
 	volatile EBYTE_State_t state;
 
 	uint8_t tx_buffer[EBYTE_BUFFER_SIZE];

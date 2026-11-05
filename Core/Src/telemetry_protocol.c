@@ -24,7 +24,6 @@ static void write_u32_le(uint8_t *buffer, uint32_t value) {
 
 uint8_t telemetry_serialize(const TelemetryData_t *data,
 							uint16_t sequence,
-							uint32_t uptime,
 							uint8_t *buffer,
 							uint16_t buffer_size) {
 
@@ -40,8 +39,6 @@ uint8_t telemetry_serialize(const TelemetryData_t *data,
 	buffer[offset++] = TELEMETRY_PKT_TYPE;
 	write_u16_le(&buffer[offset], sequence);
 	offset += 2;
-	write_u32_le(&buffer[offset], uptime);
-	offset += 4;
 
 	// Sistema
 	write_u16_le(&buffer[offset], data->system_data.bat_volt);

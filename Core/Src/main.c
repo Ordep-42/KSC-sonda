@@ -54,7 +54,7 @@ typedef enum {
 
 // AHT10
 #define AHT10_ADDRESS (0x38 << 1) // 0b1110000; Address[7-bit]Write/Read[1-bit]
-#define AHT10_DRDY 1
+#define AHT10_DRDY (1<<0)
 
 // BMP280
 #define BMP280_ADDRESS (0x76 << 1) // 0b1110110; Address[7-bit]Write/Read[1-bit]
@@ -66,8 +66,9 @@ typedef enum {
 // EBYTE Radio
 #define GS_CHAN 0x46
 #define GS_ADDR 0x1A2B
-#define RADIO_TX_MS 1000
-#define STATUS_BLINK_MS 50
+#define RADIO_TX (1<<2)
+#define STATUS_LED_OFF (1<<3)
+
 
 /* USER CODE END PD */
 
@@ -95,9 +96,7 @@ TxSequence_t radio_seq = TX_IDLE;
 static uint8_t radio_packet[TELEMETRY_FRAME_SIZE];
 static uint16_t seq = 0;
 
-uint8_t sensors_drdy = 0;
-uint8_t status_led = 0;
-uint32_t status_led_timestamp = 0;
+volatile uint8_t tim_flags = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -131,9 +130,16 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t offset) {
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	if(htim == &I2C_SENSOR_TIMER) {
-		sensors_drdy |= AHT10_DRDY;
-		sensors_drdy |= BMP280_DRDY;
-		HAL_TIM_Base_Stop_IT(&I2C_SENSOR_TIMER);
+		tim_flags |= AHT10_DRDY;
+		tim_flags |= BMP280_DRDY;
+		if (tim_flags & STATUS_LED_OFF) {
+			tim_flags &= ~STATUS_LED_OFF;
+			HAL_GPIO_WritePin(STATUS_LED_GPIO_Port,
+							  STATUS_LED_Pin,
+							  GPIO_PIN_SET);
+		}
+	} if (htim == &RADIO_TX_TIMER) {
+		tim_flags |= RADIO_TX;
 	}
 }
 
@@ -183,16 +189,15 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_USART1_UART_Init();
-  MX_USART3_UART_Init();
   MX_I2C1_Init();
   MX_TIM4_Init();
+  MX_TIM3_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   GNSS_Init(&hgnss, &GNSS_UART);
 
   hradio = (EBYTE_Handle_t){
 		  .huart = &RADIO_UART,
-		  .radio_timeout = 500,
 
 		  .m0_gpio_port = LORA_MODE_GPIO_Port,
 		  .m0_pin = LORA_MODE_Pin,
@@ -241,7 +246,7 @@ int main(void)
 
 	EBYTE_Init(&hradio);
 	EBYTE_Sleep(&hradio);
-	uint32_t last_radio_tx = 0;
+	HAL_TIM_Base_Start_IT(&RADIO_TX_TIMER);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -257,16 +262,15 @@ int main(void)
 		  hgnss.events &= ~GNSS_EVT_FIX_VALID;
 		  // GPS FIX VALID
 	  }
-	  if (sensors_drdy & AHT10_DRDY) {
+	  if (tim_flags & AHT10_DRDY) {
 		  if (AHT_ReadData(&haht, &aht_data) == HAL_OK) {
-			  sensors_drdy &= ~AHT10_DRDY;
+			  tim_flags &= ~AHT10_DRDY;
 			  AHT_TriggerMeasurement(&haht);
-			  HAL_TIM_Base_Start_IT(&htim4);
 		  }
 	  }
-	  if (sensors_drdy & BMP280_DRDY) {
+	  if (tim_flags & BMP280_DRDY) {
 		  if (BMP280_ReadData(&hbmp, &bmp_data) == HAL_OK)
-			sensors_drdy &= ~BMP280_DRDY;
+			tim_flags &= ~BMP280_DRDY;
 	  }
 
 	  if (hqmc.events & QMC_EVT_DATA_READY){
@@ -284,8 +288,8 @@ int main(void)
 		  }
 	  }
 
-	  if ((HAL_GetTick() - last_radio_tx >= RADIO_TX_MS) && radio_seq == TX_IDLE) {
-		  last_radio_tx += RADIO_TX_MS;
+	  if ((tim_flags & RADIO_TX) && radio_seq == TX_IDLE) {
+		  tim_flags &= ~(RADIO_TX);
 
 		  if (app_telemetry_prep() == TELEMETRY_OK) {
 			  seq++;
@@ -309,9 +313,10 @@ int main(void)
 		  if (hradio.state == EBYTE_IDLE) {
 			  if (EBYTE_Transmit(&hradio, GS_ADDR, GS_CHAN, radio_packet, TELEMETRY_FRAME_SIZE) == EBYTE_OK) {
 				  radio_seq = TX_SLEEP;
-				  status_led = 1;
-				  status_led_timestamp = HAL_GetTick();
-				  HAL_GPIO_WritePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin, GPIO_PIN_RESET);
+				  HAL_GPIO_WritePin(STATUS_LED_GPIO_Port,
+				                    STATUS_LED_Pin,
+				                    GPIO_PIN_RESET);
+			  tim_flags |= STATUS_LED_OFF;
 			  }
 		  }
 		  break;
@@ -321,11 +326,7 @@ int main(void)
 		  else if (hradio.state == EBYTE_SLEEP) radio_seq = TX_IDLE;
 	  }
 
-	  if(status_led && HAL_GetTick() - status_led_timestamp >= STATUS_BLINK_MS) {
-	      status_led = 0;
-	      HAL_GPIO_WritePin(STATUS_LED_GPIO_Port, STATUS_LED_Pin, GPIO_PIN_SET);
-	  }
-	  HAL_Delay(1);
+	  __WFI();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -408,7 +409,7 @@ static uint8_t app_telemetry_prep(void) {
 			.mag_data = mag_tel
 	};
 
-	return telemetry_serialize(&tel_pkt, seq, HAL_GetTick(), radio_packet, sizeof(radio_packet));
+	return telemetry_serialize(&tel_pkt, seq, radio_packet, sizeof(radio_packet));
 }
 /* USER CODE END 4 */
 

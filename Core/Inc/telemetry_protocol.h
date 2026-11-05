@@ -17,7 +17,6 @@
 uint8_t telemetry_serialize(
     const TelemetryData_t *data,
     uint16_t sequence,
-    uint32_t uptime,
     uint8_t *buffer,
     uint16_t buffer_size
 );

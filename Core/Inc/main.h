@@ -60,8 +60,8 @@ void Error_Handler(void);
 #define I2C_SENSOR_TIMER htim4
 #define SENSOR_I2C hi2c1
 #define GNSS_UART huart1
-#define DEBUG_UART huart3
 #define RADIO_UART huart2
+#define RADIO_TX_TIMER htim3
 #define STATUS_LED_Pin GPIO_PIN_13
 #define STATUS_LED_GPIO_Port GPIOC
 #define LORA_AUX_Pin GPIO_PIN_12

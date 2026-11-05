@@ -10,13 +10,13 @@
 
 #include <stdint.h>
 
-#define TELEMETRY_VER 1
+#define TELEMETRY_VER 0x02
 #define TELEMETRY_PKT_TYPE 0x01
 #define TELEMETRY_MAGIC 0x5594
 
-#define TELEMETRY_HEADER_SIZE 10
+#define TELEMETRY_HEADER_SIZE 6
 #define TELEMETRY_PAYLOAD_SIZE 36
-#define TELEMETRY_FRAME_SIZE 46
+#define TELEMETRY_FRAME_SIZE 42
 
 typedef struct {
 	uint16_t bat_volt;
