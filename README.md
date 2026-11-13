@@ -49,6 +49,22 @@ Suas principais responsabilidades são:
 
 A aquisição dos sensores ambientais e geofísicos ocorre em intervalos de 100 ms (10 Hz), enquanto a transmissão dos pacotes de telemetria é realizada a cada segundo (1 Hz).
 
+### Ferramentas e versões
+
+STM32CubeMX | 6.18.0
+STM32CubeF1 Firmware Package | 1.8.7
+
+Configuração do projeto
+
+- MCU: STM32F103C8T6
+- Arquitetura: ARM Cortex-M3
+- Frequência do sistema: 64 MHz
+- Linguagem: C
+- Compilador: ARM GCC
+- Configurações: Debug e Release
+
+O arquivo "sondinha.ioc" contém as configurações de hardware e periféricos utilizadas na geração do projeto, permitindo consultar e reproduzir a configuração do microcontrolador no STM32CubeMX. A frequência principal utiliza o HSI, devido a instabilidades com o cristal externo.
+
 ### Protocolo de comunicação
 
 A comunicação utiliza um protocolo binário próprio, desenvolvido para organizar os dados adquiridos e transmiti-los de maneira estruturada.
@@ -72,17 +88,13 @@ A plataforma utiliza três pilhas alcalinas AAA conectadas em série, associadas
 
 O firmware incorpora estratégias de redução do consumo energético, incluindo gerenciamento dos períodos de atividade e utilização de modos de baixo consumo do microcontrolador, para obter 5h30 de operação continua.
 
-### Estrutura mecânica
-
-A sonda utiliza uma lata de alumínio de 350 mL como invólucro protótipo, seguindo o conceito CanSat. Os módulos eletrônicos são interconectados em uma placa perfurada (perfboard) e possuem isolamento mecânico em EVA.
-
 ### Resultados experimentais
 
 Os ensaios realizados incluem testes individuais dos sensores, verificação do posicionamento GNSS, avaliação do consumo energético e testes de comunicação sem fio.
 
 Foi comprovado experimentalmente um alcance mínimo de comunicação de 3 km em condições de visada direta, mesmo em ambiente urbano.
 
-#### Desenvolvimento futuro
+### Desenvolvimento futuro
 
 - Integração de novos sensores ambientais e geofísicos.
 - Instrumentação para detecção de eventos ionizantes.
@@ -91,6 +103,6 @@ Foi comprovado experimentalmente um alcance mínimo de comunicação de 3 km em 
 - Registro local de dados em cartão SD.
 - Realização de experimentos com balões meteorológicos.
 
-Licença
+### Licença
 
 A licença e as condições de utilização e distribuição do projeto devem ser consultadas no arquivo "LICENSE" deste repositório.
